@@ -122,6 +122,24 @@ changes dependent on the mutations. Emergent collective behaviors appear such as
 or plane waves of activity spreading through sample. Our aim was to automatically detect 
 and characterize such collective events [CE]. 
 
+So far the standard approach of analyzing CEs was to use ML model to segment a frame into cells and their surrounding. 
+Then for each cell to separately integrate the amount of ACT (or ERK) signal 
+coming from the cell nucleus and from the cytoplasm, and subsequently to calculate the ratio between these two 
+for each cell and record it as this cell's ACT (or respectively ERK) activity. 
+Independently from calculating ACT and ERK activity the tracking algorithm was employed 
+to follow each cell over consecutive cells. Having done this, data from entire experiment 
+was stored as point cloud, where each point corresponded to a cell with its ACT and ERK activities, 
+and (tracked) id, at specific time and place. This spatiotemporal data was subsequently analyzed 
+using ARCOS [\cite{}] algorithm frame by frame to detect and annotate CEs. 
+This approach didn't take full advantage of dependencies between frames. 
+Our work makes it possible to use the spatiotemporal data in its entirety 
+allowing improved detection of CEs which intrinsically have temporal dimension. 
+We employed modified PointNet architecture to achieve this goal.
+
+We also compared the quality of aforementioned approaches with different methods of analysis of raw data 
+from observations. We considered ... We also explored the possibility of using PINNs 
+to extract pertinent insights into behavior of different cell lines.
+
 Blabalizator różnicowy jest podstawowym narzędziem blabalii
 fetorycznej.  Dlatego naukowcy z~całego świata prześcigają się
 w~próbach efektywnej implementacji.  Opracowana przez prof. Fifaka
