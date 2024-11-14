@@ -11,11 +11,10 @@
 % Poprawki spowodowane zmianami przepisow i ujednolicenie 
 % - Seweryn Karłowicz, 05.05.2006
 % Dodanie wielu autorów i tłumaczenia na angielski - Kuba Pochrybniak, 29.11.2016
-
 % dodaj opcję [licencjacka] dla pracy licencjackiej
 % dodaj opcję [en] dla wersji angielskiej (mogą być obie: [licencjacka,en])
 \documentclass[licencjacka,en]{pracamgr}
-
+\usepackage{graphicx} 
 % Dane magistranta:
 \autor{Imię Nazwisko}{231040}
 
@@ -104,61 +103,175 @@
 %\listoffigures
 %\listoftables
 
-\chapter*{Wprowadzenie}
-\addcontentsline{toc}{chapter}{Wprowadzenie}
+\chapter*{Introduction}
+\addcontentsline{toc}{chapter}{Introduction}
 
-Blabalizator różnicowy jest podstawowym narzędziem blabalii
-fetorycznej.  Dlatego naukowcy z~całego świata prześcigają się
-w~próbach efektywnej implementacji.  Opracowana przez prof. Fifaka
-teoria fetorów $\sigma$-$\rho$ otwiera w~tej dziedzinie nowe
-możliwości.  Wykorzystujemy je w~niniejszej pracy.
+A crucial part of cell biology is the process of signaling - which is the cells' way of communicating with themselves and the environment - yet it remains relatively poorly understood. Disturbances in these processes can lead, for example, to disorders in cell growth and development, physiological regulation, the life cycle of the cell - causing excessive proliferation or prolonged life - and many others, thus it's no surprise that we are observing them accompanying many health problems such as ...(tutaj żeby nie palnąć głupoty jakieś artykuły potwierdzające poszczególne problemy do zerknięcia).
 
-Przystępne wprowadzenie do blabalii fetorycznej można znaleźć w~pracy
-Fifaka i~Gryzogrzechotalskiego \cite{ffgg}.  Dlatego w~niniejszym
-tekście ograniczymy się do przypomnienia pojęć podstawowych.
+In this project we aim to give a better understanding of ACT/ERK collective activity waves which have been shown to have ability to drive apoptosis-induced survival and are suspected to play relevant role in cancer development.
 
-Praca składa się z~pięciu rozdziałów i~dodatków.
-W~rozdziale~\ref{r:pojecia} przypomniano podstawowe pojęcia blabalii
-fetorycznej.  Dotychczasowe próby implementacji blablizatora
-różnicowego zestawiono w~rozdziale~\ref{r:losers}.
-Rozdział~\ref{r:fifak} przedstawia teorię Fifaka i~wyjaśnia sposób jej
-wykorzystania w~implementacji blabalizatora.  W~rozdziale \ref{r:impl}
-przedstawiono algorytm blabalizy i~realizujący go program komputerowy.
-Ostatni rozdział zawiera przemyślenia dotyczące możliwego wpływu
-dostępności efektywnej blabalizy numerycznej na rozwój blabalii
-fetorycznej.  W~dodatkach umieszczono najciekawszy fragment programu,
-przykładowe dane i~wyniki działania programu.
+% Nie powinniśmy tutaj wszędzie dać odnośników tak jak się to robi w publikacjach?
 
-\chapter{Podstawowe pojęcia}\label{r:pojecia}
+We were presented data from observations of enzyme activity 
+coming from lines of epithelial cells with various mutations (...opis danych...).
+The changes of ERK/Akt signalling pathways in those mutants noticeably affect the cells collective behaviour - patterns of activity waves can vary significantly between samples, enabling automatic recognition of mutations types.
 
-Pojęciem pierwotnym blabalii fetorycznej jest \emph{blaba}.
-Blabaliści nie podają jego definicji, mówiąc za Ciach-Pfe t-\=am
-K\^un (fooistyczny mędrzec, XIX w. p.n.e.):
-\begin{quote}
-  Blaba, który jest blaba, nie jest prawdziwym blaba.
+%...(tutaj krótki opis wysokopoziomowego celu że predykcja/detekcja).
+%...(opis co chcieliśmy osiągnąć/osiągneliśmy, np statystyczny opis rozchodzenia się tych fali, skuteczne przewidywanie kolejnych klatek, lepsze zrozumienie jak poszczególne mutacje wpływają na te activity waves, może jakiś nowy insight do zrozumienia procesu, jak to może się przydać naukowcom w przyszłości jako narzędzie).
+%...(krótki opis tego jakich technik użyliśmy do osiągnięcia tego i jaka jest struktura tego pliku rozdziałów itp.)
 
-\raggedleft\slshape tłum. z~chińskiego Robert Blarbarucki
-\end{quote}
+% Our aim was to automatically detect 
+% and characterize such collective events [CE]. 
 
-\section{Definicje}
+So far the standard approach of analyzing such collective events (CEs) was to apply ML model to segment a frame into cells and their surrounding. 
+Then, for each cell, the ratio of the ERK(AKT) signal strength inside the nucleus and in the cytoplasm (?) would be calculated and registered.
 
-Oto dwie definicje wprowadzające podstawowe pojęcia blabalii
-fetorycznej:
+Independently from calculating ACT and ERK activity all cells were being followed over consecutive experiment frames, and their positions were recorded. Having done this, data from the entire experiment was stored as a point cloud, where each point corresponded to a cell with its unique id, along with ACT/ERK activity ratio, frame number (time) and position on the X/Y axis.
+This spatiotemporal data was subsequently analyzed using ARCOS [\cite{}] algorithm, frame by frame, to detect and annotate CEs. This approach didn't take full advantage of dependencies between frames.
 
-\begin{defi}\label{skupienie}
-  Silny, zwarty i gotowy fetor bazowy nazwiemy \emph{skupieniem}.
-\end{defi}
-
-\begin{defi}\label{fetor}
-  \emph{Fetorem} nazwiemy skupienie blaba spełniające następujący
-  \emph{aksjomat reperkusatywności}:
-  $$\forall \mathcal{X}\in Z(t)\ \exists
-  \pi\subseteq\oint_{\Omega^2}\kappa\leftrightarrow 42$$
-\end{defi}
+Our work makes it possible to use the spatiotemporal data in its entirety 
+allowing improved detection of CEs which intrinsically have temporal dimension. 
+We employed modified PointNet architecture to achieve this goal and compared the quality of aforementioned approaches with different methods of analysis of raw data from observations.
+We considered ...
+We also explored the possibility of using PINNs 
+to extract pertinent insights into behavior of different cell lines.
 
 
-\section{Blabalizator różnicowy}
+\chapter{Data exploration}\label{r:exploration}
 
+This chapter presents an exploration of the dataset, describing its structure, completeness, and key characteristics that influenced our analytical approach. Through this exploration, we aim to provide a comprehensive understanding of the data, setting a foundation for the subsequent modeling and detection methods used in this study.
+
+\section{Experiment description}
+The dataset in this study included six experiments, each capturing frames from 20 fields of view across different cell lines with mutations: WT (wild type), AKT1\_E17K, PIK3CA\_E545K, PIK3CA\_H1047R, and PTEN\_del. The device used in these experiments, shown in Figure~\ref{fig:glass_plate}, was a 96-well glass-bottom plate, where each well corresponds to one field of view. In each experiment, frames were acquired every five minutes over a 24-hour period, resulting in 289 frames per experiment. An example frame is shown in Figure~\ref{fig:simulation}.
+
+\begin{figure}[ht] \centering \includegraphics[width=0.7\textwidth]{images/glass_plates.png} \caption{A 96-well glass-bottom plate used in the experiments. Each well corresponds to one field of view.} 
+\label{fig:glass_plate} \end{figure}
+\section{DataFrame summary}
+
+The compressed .csv file containing the data was 625 MB, expanding to 2.4 GB upon decompression. Our analysis utilized a pandas DataFrame with the following structure:
+\begin{verbatim}
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 35541648 entries, 0 to 35541647
+Data columns (total 9 columns):
+ #   Column                       Dtype  
+---  ------                       -----  
+ 0   Exp_ID                       int64  
+ 1   Image_Metadata_Site          int64  
+ 2   track_id                     int64  
+ 3   Image_Metadata_T             int64  
+ 4   Nuclear_size                 float64
+ 5   ERKKTR_ratio                 float64
+ 6   FoxO3A_ratio                 float64
+ 7   objNuclei_Location_Center_X  float64
+ 8   objNuclei_Location_Center_Y  float64
+dtypes: float64(5), int64(4)
+memory usage: 2.4 GB
+\end{verbatim}
+
+\begin{itemize}
+    \item \textbf{Exp\_ID} - Experiment number (\texttt{int64}).
+    \item \textbf{Image\_Metadata\_Site} - Field of view number (\texttt{int64}).
+    \item \textbf{track\_id} - Identifier of the tracked cell (\texttt{int64}).
+    \item \textbf{Image\_Metadata\_T} - Frame number for each tracked cell (\texttt{int64}).
+    \item \textbf{Nuclear\_size} - Size of the nucleus (\texttt{float64}).
+    \item \textbf{ERKKTR\_ratio} - Ratio of ERK and KTR markers (\texttt{float64}).
+    \item \textbf{FoxO3A\_ratio} - Ratio of FoxO3A marker (\texttt{float64}).
+    \item \textbf{objNuclei\_Location\_Center\_X} - Location of the cell along the X-axis in pixels (\texttt{float64}).
+    \item \textbf{objNuclei\_Location\_Center\_Y} - Location of the cell along the Y-axis in pixels (\texttt{float64}).
+\end{itemize}
+
+
+
+
+\section{Data completeness}
+
+Data completeness was assessed to determine the quality and continuity of the dataset. There were no NaN values present in the dataset. However, since cell tracking can be disrupted, the number of frames for each cell was reduced to 258, which was the smallest number across all fields of view. Additionally, approximately 56.56\% of the tracked cells were represented across the 258 frames, providing a solid foundation for temporal analysis. The distribution of frames acquired for each cell is shown in Figure~\ref{fig:frames_distribution}.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/frames_distribution.png}
+    \caption{Distribution of number of frames.}
+    \label{fig:frames_distribution}
+\end{figure} 
+
+\section{Single cell movement}
+
+Our analysis revealed substantial movement among cells across consecutive frames throughout the experiments, an observation that influenced our analytical approach. Movement patterns and rates varied noticeably across different cell types and mutations. Figure~\ref{fig:single_cell} illustrates the variations in movement for six randomly selected cells.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{images/single_cell_movement.png}
+    \caption{Single cells movement.}
+    \label{fig:single_cell}
+\end{figure} 
+
+\section{Simulation}
+
+We created a simulation to model cell movement within a single field of view from one experiment, including the variation in ERKKTR\_ratio intensity. The simulation tracked both the location of the cell nuclei and the ERKKTR\_ratio intensity across successive frames. Rapid fluctuations in the ERKKTR\_ratio intensity were observed, providing insights into its dynamic role in cell behavior.
+Figure~\ref{fig:simulation} shows an example frame from the first experiment.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/simulation.png}
+    \caption{An example frame in the simulation.}
+    \label{fig:simulation}
+\end{figure} 
+
+\section{Distribution of features}
+To better understand the behavior of the markers, we examined their underlying distributions. We found that the distributions of marker intensities observed in the experiments closely resembled a beta distribution (Figure~\ref{fig:markers}). This finding was useful in the creation of the generator model, which helped simulate the marker behavior more accurately.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/marker_distribution.png}
+    \caption{An example marker distribution.}
+    \label{fig:markers}
+\end{figure} 
+
+\section{Features Correlation}
+
+Additionally, we measured the correlation between quantitative features in our dataset. We used Spearman correlation, as it does not assume that the features follow a normal distribution (Notably, ERKKTR\_ratio follows a beta distribution, as described earlier in the section on feature distributions.). The features appeared to be mostly uncorrelated, with the exception of Nuclear\_size and ERKKTR\_ratio (-0.26), as well as FoxO3A\_ratio and ERKKTR\_ratio (0.2). Figure~\ref{fig:correlation} depicts a correlation matrix.
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/correlation.png}
+    \caption{Correlations between features for the first experiment in field of view 1.}
+    \label{fig:correlation}
+\end{figure} 
+
+\section{Mutation and features}
+Understanding the differences between mutations and various features was crucial for our modeling, as we modeled a generation of each mutation separately. We observed that nuclear sizes and ERKKTR\_ratio were significantly larger in cells with the PIK3CA\_H1047R mutation. The relationship between mutations and nuclear sizes, as well as ERKKTR\_ratio, is illustrated in Figure~\ref{fig:size_mutations} and Figure~\ref{fig:erk_mutations}, respectively.
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/size_mutations.png}
+    \caption{A bar char of mean nuclear size for each mutation.}
+    \label{fig:size_mutations}
+\end{figure} 
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/erk_mutations.png}
+    \caption{A bar char of mean ERKKTR\_ratio for each mutation.}
+    \label{fig:erk_mutations}
+\end{figure} 
+
+\section{Mutation and motility}
+To better understand how different mutations affect cell behavior, we measured the motility of cells for each mutation. We define motility as the average distance traveled by all cells with a given mutation. Cells with the PIK3CA\_E545K and PIK3CA\_H1047R mutation showed much higher motility, while cells with other mutations had similar, more consistent motility levels, as shown in Figure~\ref{fig:motility}.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/motility.png}
+    \caption{A bar chart of motility for mutations.}
+    \label{fig:motility}
+\end{figure} 
+
+
+
+
+
+\chapter{BlaBla}
 Teoretycy blabalii (zob. np. pracę~\cite{grglo}) zadowalają się
 niekonstruktywnym opisem natury fetorów.
 
