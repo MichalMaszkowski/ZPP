@@ -2,6 +2,9 @@ import numpy as np
 import math
 import pandas as pd
 from typing import Tuple, List
+from scipy.spatial import Voronoi
+from scipy.spatial import distance_matrix
+import networkx as nx
 
 class Extractor:
     def __init__(self,  data: pd.DataFrame) -> None:
@@ -12,18 +15,44 @@ class Extractor:
         """
         self.data = data
 
+    def build_graph_voronoi(
+        self,
+        positions: List[Tuple[float, float]]
+    ) -> nx.Graph:
+        """
+        Builds a graph based on the Voronoi diagram of a list of cells positions.
+
+          Parameters:
+              positions (List[Tuple[float, float]]): A list of 2D points (x, y) representing cell positions.
+          Returns:
+              nx.Graph: A NetworkX graph where nodes correspond to points and edges represent Voronoi neighbors.
+          """
+        # Convert the list of points to a NumPy array
+        np_positions = np.array(positions)
+
+        # Generate the Voronoi diagram
+        vor = Voronoi(np_positions)
+        # Create the graph
+        graph = nx.Graph()
+
+        # Add edges based on Voronoi neighbors
+        for neighbors in vor.ridge_points:
+            graph.add_edge(*neighbors)
+
+        return graph
+
     def extract_positions(
         self,
-        exp_id : int,
-        frame : int
-    ) -> List[Tuple[int, int]]:
+        exp_id: int,
+        frame: int
+    ) -> List[Tuple[float, float]]:
         """
         Extracts cells positions from experiments data.
         Args:
             exp_id : id of the experiment
             frame : number of the frame in the given experiment
         Returns:
-            List[Tuple[int, int]]: a list of all the cells postions in the given experiment and frame
+            List[Tuple[float, float]]: a list of all the cells positions in the given experiment and frame
         """
         # Filter the data to get only rows corresponding to the specified experiment ID and frame
         filtered_data = self.data[(self.data['Exp_ID'] == exp_id) & (self.data['Image_Metadata_T'] == frame)]
@@ -35,56 +64,33 @@ class Extractor:
         return positions
 
 
-    def extract_distances(
+    def nearest_neighbours(
         self,
-        exp_id: int,
-        frame: int
-    ) -> List[float]:
+        positions: List[Tuple[float, float]]
+    ) -> dict:
         """
-        Extracts the distribution of distances between cells nuclei.
+        Extracts simple statistics of the list of distances to the cells nearest neighbours.
         Args:
-            exp_id : id of the experiment
-            frame : number of the frame in the given experiment
+            positions: a list of all the cells positions in one frame
         Returns:
-            List[float]: a list of all the distances
+            dict: A dictionary containing the following metrics:
+            - 'min_distances': The minimum distances to the nearest neighbor for each point
+            (the order of the min_distances array corresponds to the order of the points in the input positions array).
+            - 'mean_min_distance': The mean of the minimum distances.
+            - 'min_distance_overall': The smallest minimum distance across all points.
+            - 'max_distance_overall': The largest minimum distance across all points.
         """
-        positions = self.extract_positions(exp_id, frame)
-        distances = []
+        distances = distance_matrix(positions, positions)
+        np.fill_diagonal(distances, np.inf)  # Ignore self-distances
 
-        # Calculate the distance between all pairs of positions
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                x1, y1 = positions[i]
-                x2, y2 = positions[j]
+        min_distances = distances.min(axis=1)  # Distance to nearest neighbor
 
-                # Euclidean distance
-                distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-                distances.append(distance)
-
-        # If there are no distances (empty list or only one position), return an empty list
-        if not distances:
-            return []
-
-        return distances
-
-    def get_distances_distribution(
-        self,
-        exp_id: int,
-        frame: int
-    ) -> Tuple[float, float]:
-        """
-        Extracts the distribution of distances between cells nuclei.
-        Args:
-            exp_id : id of the experiment
-            frame : number of the frame in the given experiment
-        Returns:
-            Tuple[float, float]: mean and variance of the distances.
-        """
-        distances = np.array(self.extract_distances(exp_id, frame))
-        # If there are no distances (empty list or only one position), return 0, 0
-        if not distances:
-            return 0, 0
-        return np.mean(distances), np.var(distances)
+        return {
+            'min_distances': min_distances,
+            'mean_min_distance':  np.mean(min_distances),
+            'min_distance_overall': np.min(min_distances),
+            'max_distance_overall': np.max(min_distances)
+        }
 
     def extract_cells_count(
         self,
@@ -101,3 +107,29 @@ class Extractor:
         """
         filtered_data = self.data[(self.data['Exp_ID'] == exp_id) & (self.data['Image_Metadata_T'] == frame)]
         return len(filtered_data)
+
+    def extract_ERKKTR_ratios(
+        self,
+        exp_id: int,
+        frame: int
+    ) -> List[float]:
+        """
+            Extracts ratios of ERK and KTR markers in a given frame.
+            Args:
+                exp_id : id of the experiment
+                frame : number of the frame in the given experiment
+            Returns:
+                List[float]: the list of ratios
+        """
+        filtered_data = self.data[(self.data['Exp_ID'] == exp_id) & (self.data['Image_Metadata_T'] == frame)]
+        return list(filtered_data['ERKKTR_ratio'])
+
+
+# Example usage
+if __name__ == "__main__":
+    data_df = pd.read_csv("path/to/data.csv")
+    extractor = Extractor(data_df)
+
+    print(f"In experiment no 1, in the first frame there are {extractor.extract_cells_count(exp_id=1, frame=1)} cells")
+
+
