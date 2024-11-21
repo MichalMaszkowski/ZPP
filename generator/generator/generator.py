@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import random
 import math
 from typing import Tuple, List, Optional
+from ..extractor.extractor import *
+from ..visualizer.visualizer import *
+
 
 
 class Generator:
@@ -44,36 +47,6 @@ class Generator:
                 points.append((x, y))
         
         return points
-
-    def visualize_points(
-        self, 
-        points: List[Tuple[int, int]], 
-        height: int = 1024, 
-        width: int = 1024
-    ) -> None:
-        """
-        Visualizes the distributed points on the board.
-
-        Args:
-            points (List[Tuple[int, int]]): A list of points to visualize.
-            height (int): The height of the board (default is 1024).
-            width (int): The width of the board (default is 1024).
-        """
-        if not points:
-            raise ValueError("The list of points is empty. Cannot visualize.")
-
-        x_coords, y_coords = zip(*points)  # Unpack points into x and y coordinates
-
-        plt.figure(figsize=(10, 10))
-        plt.scatter(x_coords, y_coords, c='blue', s=10, alpha=0.6)
-        plt.title("Points Visualization on the Board")
-        plt.xlabel("X")
-        plt.ylabel("Y")
-        plt.xlim(-20, width + 20)
-        plt.ylim(-20, height + 20)
-        plt.grid(True)
-        plt.show()
-
     
     def update_points_positions(
         self,
@@ -130,7 +103,8 @@ if __name__ == "__main__":
         points = generator.deploy_points(height=1024, width=1024, points_num=1128, min_dist=23)
 
         # Visualize the points
-        generator.visualize_points(points)
-        generator.visualize_points(generator.update_points_positions(points))
+        visualize_points(points)
+        visualize_points(generator.update_points_positions(points))
+        visualize_voronoi_field(points, 1024, 23)
     except ValueError as e:
         print(f"Error: {e}")
