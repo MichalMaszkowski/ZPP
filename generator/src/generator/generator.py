@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import random
 import math
 from typing import Tuple, List, Optional
-from ..extractor.extractor import *
-from ..visualizer.visualizer import *
+import src.extractor.extractor as extractor
+import src.visualizer.visualizer as visualizer
 
 
 
@@ -103,8 +103,8 @@ if __name__ == "__main__":
         points = generator.deploy_points(height=1024, width=1024, points_num=1128, min_dist=23)
 
         # Visualize the points
-        visualize_points(points)
-        visualize_points(generator.update_points_positions(points))
-        visualize_voronoi_field(points, 1024, 23)
+        visualizer.visualize_points(points)
+        visualizer.visualize_points(generator.update_points_positions(points))
+        visualizer.visualize_voronoi_field(points, 1024, 23)
     except ValueError as e:
         print(f"Error: {e}")

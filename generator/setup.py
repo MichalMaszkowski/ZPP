@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="generator",
     version="0.0.1",
-    author="Zuzanna Kiczak, Michał Korniak, Michał Maszkowski, Adam Jaskuła",
+    author="Zuz Kiczak, Michał Korniak, Michał Maszkowski, Adam Jaskuła",
     author_email="mk448287@students.mimuw.edu.pl",
     description="A package for generating spatio-temporal cellular data",
     long_description=long_description,
