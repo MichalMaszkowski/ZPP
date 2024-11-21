@@ -1,3 +1,4 @@
 generator/venv/
 generator/.idea/
 .DS_Store
+__pycache__/
