@@ -1,6 +1,6 @@
 import numpy as np
-import math
 import pandas as pd
+import json
 from typing import Tuple, List
 from scipy.spatial import Voronoi
 from scipy.spatial import distance_matrix
@@ -108,21 +108,85 @@ class Extractor:
         filtered_data = self.data[(self.data['Exp_ID'] == exp_id) & (self.data['Image_Metadata_T'] == frame)]
         return len(filtered_data)
 
-    def extract_ERKKTR_ratios(
+    def extract_ERKKTR_stats(
         self,
         exp_id: int,
         frame: int
-    ) -> List[float]:
+    ) -> dict:
         """
-            Extracts ratios of ERK and KTR markers in a given frame.
-            Args:
-                exp_id : id of the experiment
-                frame : number of the frame in the given experiment
-            Returns:
-                List[float]: the list of ratios
+        Extracts average and standard deviation of ratios of ERK and KTR markers in a given frame.
+        
+        Args:
+            exp_id: ID of the experiment.
+            frame: The frame number in the given experiment.
+            
+        Returns:
+            dict: A dictionary with the following keys:
+                - 'average_ERKKTR_ratio': The average of ERK/KTR ratios in the frame.
+                - 'std_ERKKTR_ratio': The standard deviation of the ERK/KTR ratios in the frame.
         """
+        # Filter the data to get only the rows corresponding to the specified experiment and frame
         filtered_data = self.data[(self.data['Exp_ID'] == exp_id) & (self.data['Image_Metadata_T'] == frame)]
-        return list(filtered_data['ERKKTR_ratio'])
+
+        # Extract the ERKKTR_ratio values as a list
+        erkktr_ratios = list(filtered_data['ERKKTR_ratio'])
+        
+        # Return the results as a dictionary
+        return {
+            'average_ERKKTR_ratio': np.mean(erkktr_ratios),
+            'std_ERKKTR_ratio': np.std(erkktr_ratios)
+        }
+    
+
+    def experiment_to_json(self, exp_id: int, filename: str) -> dict:
+        """
+        Extracts various data and saves it to a JSON file.
+        
+        Args:
+            exp_id (int): ID of the experiment.
+            filename (str): Path of the JSON file to save the data.
+        
+        Returns:
+            dict: Dictionary containing the extracted data;
+        """
+        # Initialize a dictionary to store all extracted data
+        data_dict = {}
+
+        # Get the sorted unique frame numbers from the "Image_Metadata_T" column
+        frame_numbers = sorted(self.data['Image_Metadata_T'].unique())
+        # Check if the frame numbers are consecutive, starting from 0
+        if frame_numbers != list(range(min(frame_numbers), max(frame_numbers) + 1)):
+            raise ValueError(f"Gaps detected in the frame numbers. Expected a continuous sequence from 0 to {max(frame_numbers)}.")
+        
+        cell_counts = []
+        erk_ratio_avgs = []
+        erk_ratio_stds = []
+        
+        # Iterate over each frame number and count cells
+        for frame in frame_numbers:
+            cell_counts.append(self.extract_cells_count(exp_id, frame))
+            stats = self.extract_ERKKTR_stats(exp_id, frame)
+            erk_ratio_avgs.append(stats["average_ERKKTR_ratio"])
+            erk_ratio_stds.append(stats["std_ERKKTR_ratio"])
+        
+        data_dict["cell_count"] = {
+            "avg": np.mean(cell_counts),  # Average cell count
+            "std": np.std(cell_counts)   # Standard deviation of cell count
+        }
+        data_dict["ERKKTR_ratio"] = {
+            # Averages stats
+            "avg": np.mean(erk_ratio_avgs), # Average ratio over all frames
+            "std_of_averages": np.std(erk_ratio_avgs), # Standard deviation of averages
+            # Standard deviation stats
+            "avg_std": np.mean(erk_ratio_stds) # Average standard deviation 
+        }
+
+        # Save the data to a JSON file
+        with open(filename, 'w') as f:
+            json.dump(data_dict, f, indent=4)
+
+        # Return the dictionary
+        return data_dict
 
 
 # Example usage
@@ -131,5 +195,3 @@ if __name__ == "__main__":
     extractor = Extractor(data_df)
 
     print(f"In experiment no 1, in the first frame there are {extractor.extract_cells_count(exp_id=1, frame=1)} cells")
-
-
