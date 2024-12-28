@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import os
 import math
 from typing import Tuple, List, Optional
 from scipy.spatial import Voronoi, voronoi_plot_2d, distance_matrix
 import networkx as nx
+import imageio.v2 as imageio
 
 def visualize_points( 
         points: List[Tuple[int, int]], 
@@ -55,10 +57,6 @@ def visualize_voronoi_field(cell_positions, field_size, min_distance):
     for point_idx, neighbors in enumerate(vor.ridge_points):
         graph.add_edge(*neighbors)
 
-    # Validate the field of view
-    # is_valid = validate_min_distance(cell_positions, graph, min_distance)
-    # assert is_valid, "Some neighbors violate the minimum distance constraint!"
-
     # Calculate distances
     distances = distance_matrix(cell_positions, cell_positions)
     np.fill_diagonal(distances, np.inf)  # Ignore self-distances
@@ -92,3 +90,74 @@ def visualize_voronoi_field(cell_positions, field_size, min_distance):
         "max_distance_overall": max_distance_overall,
         "avg_num_neighbors": avg_num_neighbors
     }
+
+def save_simulation_to_gif(simulation, marker, time_points, output_gif="simulation.gif", frame_duration=1):
+    """
+    Generates a GIF simulating movement based on a given marker over specified time points.
+
+    Parameters:
+    - simulation: pd.DataFrame, the simulation data containing coordinates and marker values.
+    - marker: str, the column name for the marker whose values are used for coloring the scatter plot.
+    - time_points: list or range, the time points to iterate over (e.g., range(1, 21)).
+    - output_gif: str, the output file name for the GIF (saved in 'visualizations' folder).
+    - frame_duration: float, the duration of each frame in seconds.
+
+    Returns:
+    - None
+    """
+    # Ensure the 'visualizations' folder exists
+    os.makedirs("visualizations", exist_ok=True)
+
+    # Compute min and max values for color scale
+    min_value = np.log(simulation[marker].min())
+    max_value = np.log(simulation[marker].max())
+
+    # Temporary directory for saving frames
+    os.makedirs("temp_frames", exist_ok=True)
+    frames = []
+
+    for t in range(time_points):
+        # Filter data for the current time point
+        current_frame = simulation[simulation['Image_Metadata_T'] == t]
+
+        # Create figure
+        plt.figure(figsize=(8, 6))
+
+        sc = plt.scatter(
+            current_frame['objNuclei_Location_Center_X'],
+            current_frame['objNuclei_Location_Center_Y'],
+            s=16,
+            c=np.log(current_frame[marker]),
+            cmap='RdYlGn',
+            vmin=min_value,
+            vmax=max_value
+        )
+
+        plt.xlabel('Center X')
+        plt.ylabel('Center Y')
+        plt.title(f'Simulating Movement Time: {t}')
+        plt.grid(True)
+
+        cbar = plt.colorbar(sc, label=f'Intensity ({marker})')
+
+        # Save frame
+        filename = f"temp_frames/frame_{t:03d}.png"
+        plt.savefig(filename)
+        frames.append(filename)
+        plt.close()  # Close the figure to save memory
+
+    # Full path to the output GIF
+    output_gif_path = os.path.join("visualizations", output_gif)
+
+    # Create GIF
+    with imageio.get_writer(output_gif_path, mode='I', duration=frame_duration) as writer:
+        for frame in frames:
+            image = imageio.imread(frame)
+            writer.append_data(image)
+
+    # Cleanup
+    for frame in frames:
+        os.remove(frame)
+    os.rmdir("temp_frames")
+
+    print(f"GIF saved as '{output_gif_path}'")
