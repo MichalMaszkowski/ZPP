@@ -1,38 +1,25 @@
-import numpy as np
-from scipy.stats import truncnorm
-import networkx as nx
+import gzip
+import pandas as pd
+import gdown
 
-def validate_min_distance(cell_positions, graph, min_distance):
+
+def unpack_and_read(f_p=None) -> pd.DataFrame:
     """
-    Validates if no neighboring cells violate the minimum distance constraint.
+    Unpacks and reads a gzipped CSV file into a Pandas DataFrame.
 
-    Parameters:
-        cell_positions: np.ndarray of cell positions (N x 2)
-        graph: networkx.Graph representing the Voronoi neighbors
-        min_distance: Minimum allowed distance between neighboring cells
+    Args:
+    - f_p (str): The file path to the gzipped CSV file. Defaults to a sample file. If None, downloads the sample file.
+
     Returns:
-        bool: True if all neighbors satisfy the minimum distance, False otherwise
+    - pd.DataFrame: A DataFrame containing the data from the CSV file.
     """
-    violations = []
+    if f_p is None:
+        file_id = "1xsDZF8PZUNNzYAVrfuNxGoLMhoEFgAuN"
+        url = f"https://drive.google.com/uc?id={file_id}"
 
-    for edge in graph.edges:
-        cell1, cell2 = edge
-        distance = np.linalg.norm(cell_positions[cell1] - cell_positions[cell2])
+        f_p = "data.csv.gz"
+        gdown.download(url, f_p, quiet=False)
 
-        if distance < min_distance:
-            violations.append((cell1, cell2, distance))
-
-    if violations:
-        print("Violations found:")
-        for v in violations:
-            print(f"Cells {v[0]} and {v[1]} are {v[2]:.2f} pixels apart (violates min_distance = {min_distance})")
-
-        return False
-
-    print("All neighboring cells satisfy the minimum distance constraint.")
-    return True
-
-# Helper function to generate truncated normal samples
-def generate_truncated_normal(mean, std, lower, upper, size):
-    a, b = (lower - mean) / std, (upper - mean) / std
-    return truncnorm(a, b, loc=mean, scale=std).rvs(size)
+    with gzip.open(f_p, 'rt') as f:
+        df = pd.read_csv(f)
+    return df
