@@ -4,3 +4,4 @@ generator/.idea/
 __pycache__/
 .idea/
 generator/data/
+generator/augumented_data/

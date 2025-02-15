@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 from scipy.spatial import Voronoi
 from tqdm import tqdm
+from typing import Tuple, List
+from enum import Enum
+import random
+import os
 
 import src.utils.utils as utils
 import src.visualizer.visualizer as visualizer
@@ -15,7 +19,23 @@ else:
     DEVICE = torch.device("cpu")
 
 
-class Generator:
+class ExtractionMethod(Enum):
+    RANDOM = "random"
+    GRID = "grid"
+
+    def __str__(self):
+        return self.value
+
+class Rotation(Enum):
+    DEG_0 = 0
+    DEG_90 = 90
+    DEG_180 = 180
+    DEG_270 = 270
+
+    def __str__(self):
+        return f"{self.value}°"
+
+class Generator:            
     def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 259):
         """
         Initializes the Generator object with the first frame of data and the number of frames to simulate.
@@ -117,7 +137,7 @@ class Generator:
 
         return torch.tensor(adjacency_matrix, device=DEVICE)
 
-    def generate_video(self):
+    def generate_video(self, number_of_frames = None):
         """
             Generates a simulated video of tracked nuclei over multiple frames, updating their positions and ERK values.
 
@@ -128,9 +148,11 @@ class Generator:
             Returns:
             - pd.DataFrame: The DataFrame containing the complete video simulation data for all frames.
             """
+        if number_of_frames is None:
+            number_of_frames = self.number_of_frames
         result_data_frame = self.df_first_frame.copy()
         current_frame = self.df_first_frame.copy()
-        for T in tqdm(range(2, self.number_of_frames + 1), desc='Generating video'):
+        for T in tqdm(range(2, number_of_frames + 1), desc='Generating video'):
             adjacency_matrix = self.calculate_neighbors(current_frame)
             next_frame = self.generate_next_ERK(current_frame, adjacency_matrix, T)
             next_frame = self.generate_next_move(next_frame)
@@ -141,11 +163,111 @@ class Generator:
 
         return result_data_frame
 
+    def get_augmented_data(
+        self, 
+        first_frame: pd.DataFrame, 
+        subwindow_size: Tuple[int, int] = (200, 200),  
+        rotations: Rotation = Rotation.DEG_0,          # <-- Poprawione
+        extraction_method: Tuple[ExtractionMethod, int] = (ExtractionMethod.RANDOM, 3),  
+        time_interval: int = None, 
+        folder_path: str = '../../augmented_data/', 
+        filename: str = 'augmented_data_'
+    ):
+        """
+        
+        """
+
+        def get_origins():
+            
+            sub_height, sub_width = subwindow_size
+            method, num_origins = extraction_method
+            origins = []
+            start_x, start_y = 0.0, 0.0
+
+            assert start_x + sub_width < first_frame_width
+
+            if method == ExtractionMethod.RANDOM:
+                
+                for _ in range(num_origins):
+                    x = random.uniform(0.0, first_frame_width - sub_width)
+                    y = random.uniform(0.0, first_frame_height - sub_height)
+                    origins.append((x, y))
+
+
+            if method == ExtractionMethod.GRID:
+
+                for i in range(num_origins):
+
+                    assert y + sub_height < first_frame_height, "Too many frames in this grid"
+                    origins.append((x, y))
+                    x += sub_width
+                    if x > first_frame_width:
+                        x = 0.0
+                        y += sub_height
+                    
+            return origins
+
+        def get_first_frames_from_origins(origins: List[Tuple[float, float]]) -> List[pd.DataFrame]:
+
+            first_frames = []
+
+            for origin in origins:
+                x_min, y_min = origin
+                x_max, y_max = x_min + sub_width, y_min + sub_height
+
+                filtered_frame = first_frame[(first_frame['objNuclei_Location_Center_X'].between(x_min, x_max)) & (first_frame['objNuclei_Location_Center_Y'].between(y_min, y_max))]
+                first_frames.append(filtered_frame)
+
+            return first_frames
+
+        def rotate_points_inplace(frames, angle_deg=rotations.value, x_col='objNuclei_Location_Center_X', y_col='objNuclei_Location_Center_Y'):
+
+            for df in frames:
+                angle_rad = np.radians(angle_deg)
+                
+                new_X = df[x_col] * np.cos(angle_rad) - df[y_col] * np.sin(angle_rad)
+                new_Y = df[x_col] * np.sin(angle_rad) + df[y_col] * np.cos(angle_rad)
+                
+                df.loc[:, x_col] = new_X
+                df.loc[:, y_col] = new_Y
+
+        sub_width, sub_height = subwindow_size
+        margin = 5.0
+        min_X, max_X = first_frame['objNuclei_Location_Center_X'].min() - margin, first_frame['objNuclei_Location_Center_X'].max() + margin
+        min_Y, max_Y = first_frame['objNuclei_Location_Center_Y'].min() - margin, first_frame['objNuclei_Location_Center_Y'].max() + margin
+
+        first_frame_height = (max_Y - min_Y).round()
+        first_frame_width = (max_X - min_X).round()
+
+        assert sub_height <= first_frame_height and sub_width <= first_frame_width, (
+            f"Subwindow should fit in the first frame. "
+            f"First frame height: {first_frame_height}, First frame width: {first_frame_width}, "
+            f"Subwindow height: {sub_height}, Subwindow width: {sub_width}"
+        )
+
+        origins = get_origins()
+        first_frames = get_first_frames_from_origins(origins)
+        rotate_points_inplace(first_frames)
+
+        
+        augumented_series = []
+        for i, df in enumerate(first_frames):
+            augumented_df = self.generate_video(time_interval)
+            curr_filename = filename + str(i) + '.csv'
+            full_path = os.path.join(folder_path, curr_filename)
+
+            os.makedirs(folder_path, exist_ok=True)
+            augumented_df.to_csv(full_path, index=False)
+        
+
+
+
 
 if __name__ == "__main__":
     df = utils.unpack_and_read('../../data/single-cell-tracks_exp1-6_noErbB2.csv.gz')
     df_first_frame = df[(df['Image_Metadata_Site'] == 1) & (df['Exp_ID'] == 1) & (df['Image_Metadata_T'] == 1)][
         ['track_id', 'objNuclei_Location_Center_X', 'objNuclei_Location_Center_Y', 'ERKKTR_ratio', 'Image_Metadata_T']]
     generator = Generator(df_first_frame=df_first_frame)
-    video_data = generator.generate_video()
-    visualizer.visualize_simulation(video_data)
+    # video_data = generator.generate_video()
+    generator.get_augmented_data(df_first_frame, time_interval = 3)
+    # visualizer.visualize_simulation(video_data)
