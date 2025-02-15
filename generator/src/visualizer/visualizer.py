@@ -8,6 +8,16 @@ import os
 
 
 def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
+    """
+    Visualizes the simulation of nuclei movement and ERK values over time.
+
+        Args:
+        - simulation (pd.DataFrame): The DataFrame containing the simulation data.
+        - number_of_frames (int): The number of frames to simulate.
+
+        Returns:
+        - None
+    """
     marker = 'ERKKTR_ratio'
 
     min_value = np.log(simulation[marker].min())
