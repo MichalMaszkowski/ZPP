@@ -1,110 +1,151 @@
+import torch
+import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import random
-import math
-from typing import Tuple, List, Optional
-import src.extractor.extractor as extractor
+from scipy.spatial import Voronoi
+from tqdm import tqdm
+
+import src.utils.utils as utils
 import src.visualizer.visualizer as visualizer
 
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    DEVICE = torch.device("mps")
+else:
+    DEVICE = torch.device("cpu")
 
 
 class Generator:
-    def __init__(self) -> None:
-        """Initializes the point generator."""
-        pass
-
-    def deploy_points(
-        self, 
-        height: int = 1024, 
-        width: int = 1024, 
-        points_num: int = 1128, 
-        min_dist: int = 23
-    ) -> Optional[List[Tuple[int, int]]]:
+    def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 259):
         """
-        Generates a list of points randomly distributed on a board of dimensions (width x height),
-        with a minimum distance constraint between points.
+        Initializes the Generator object with the first frame of data and the number of frames to simulate.
+        :param df_first_frame:
+        :param number_of_frames:
+        """
+        self.df_first_frame = df_first_frame
+        self.number_of_frames = number_of_frames
+
+    def generate_next_move(self, current_frame: pd.DataFrame) -> pd.DataFrame:
+        """
+        Simulates the next movement of nuclei in the frame by adding random noise to their X and Y coordinates.
 
         Args:
-            height (int): The height of the board (default is 1024).
-            width (int): The width of the board (default is 1024).
-            points_num (int): The number of points to generate (default is 1128).
-            min_dist (int): The minimum distance between points (default is 23).
+        - current_frame (pd.DataFrame): The DataFrame representing the current frame of data, which includes the positions.
 
         Returns:
-            Optional[List[Tuple[int, int]]]: A list of points (x, y) or None in case of invalid parameters.
+        - pd.DataFrame: The updated DataFrame with modified X and Y coordinates for the nuclei.
         """
-        if height <= 0 or width <= 0 or points_num <= 0:
-            raise ValueError("Board dimensions and the number of points must be positive.")
+        current_frame['objNuclei_Location_Center_X'] += np.random.normal(0, 0.43, size=current_frame[
+            'objNuclei_Location_Center_X'].shape)
+        current_frame['objNuclei_Location_Center_Y'] += np.random.normal(0, 0.43, size=current_frame[
+            'objNuclei_Location_Center_Y'].shape)
+        return current_frame
 
-        points = []
-
-        while len(points) < points_num:
-            x = random.randint(0, width - 1)
-            y = random.randint(0, height - 1)
-
-            # Check if the point is sufficiently far from all existing points
-            if all(math.sqrt((x - px)**2 + (y - py)**2) >= min_dist for px, py in points):
-                points.append((x, y))
-        
-        return points
-    
-    def update_points_positions(
-        self,
-        points: List[Tuple[int, int]], 
-        max_shake: float = 0.2, 
-        threshold: int = 23  # Minimum distance between points
-    ) -> List[Tuple[int, int]]:
+    def generate_next_ERK(self, points: pd.DataFrame, adjacency_matrix: torch.tensor, T: int) -> pd.DataFrame:
         """
-        Shakes the points slightly by a random amount in the range of [-max_shake, max_shake],
-        ensuring that the new positions maintain the minimum distance between them.
+        Simulates the next ERK values for the given nuclei based on adjacency and previous ERK values.
 
         Args:
-            points (List[Tuple[int, int]]): Current positions of points.
-            max_shake (int): Maximum displacement distance for shaking (default is 0.2).
-            threshold (int): Minimum distance that must be maintained between points (default is 23).
+        - points (pd.DataFrame): The DataFrame containing the current positions and ERK values.
+        - adjacency_matrix (torch.tensor): A tensor representing the adjacency matrix, indicating which nuclei are neighbors.
+        - T (int): The current time point/frame number.
 
         Returns:
-            List[Tuple[int, int]]: New positions of points after shaking.
+        - pd.DataFrame: The updated DataFrame with new ERK values.
         """
-        new_points = []
+        points = points.copy()
+        points = points.sort_values(by=['track_id'])
+        points_ERK = torch.tensor(points['ERKKTR_ratio'].values, device=DEVICE, dtype=torch.float32)
 
-        for (px, py) in points:
-            while True:
-                # Slightly shake the point by adding small random values to x and y coordinates
-                shake_x = random.uniform(-max_shake, max_shake)
-                shake_y = random.uniform(-max_shake, max_shake)
+        mean_before = torch.mean(points_ERK)
+        std_before = torch.std(points_ERK)
 
-                # New candidate position after shaking
-                new_x = px + shake_x
-                new_y = py + shake_y
+        max_neighbor = torch.max(adjacency_matrix * points_ERK, dim=1).values
 
-                # Check if the new position maintains the minimum distance from all other points
-                valid_position = True
-                for (other_x, other_y) in new_points:
-                    # Calculate Euclidean distance between the new position and the other points
-                    distance = math.sqrt((new_x - other_x) ** 2 + (new_y - other_y) ** 2)
-                    if distance < threshold:
-                        valid_position = False
-                        break  # If the new point is too close, break and retry
+        mask = max_neighbor < 1.2
+        new_ERK = torch.where(mask, points_ERK, 0.005 * max_neighbor + 0.995 * points_ERK)
 
-                # If the new position is valid, add it to the list and break the loop
-                if valid_position:
-                    new_points.append((new_x, new_y))
-                    break
+        mean_after = torch.mean(new_ERK)
+        std_after = torch.std(new_ERK)
 
-        return new_points
+        noise_mean = mean_before - mean_after
+        noise_std = torch.sqrt(abs(std_after ** 2 - std_before ** 2))
 
-# Example usage
+        new_ERK = torch.clamp(
+            new_ERK + torch.normal(mean=float(noise_mean), std=float(noise_std), size=new_ERK.shape, device=DEVICE),
+            min=0.4, max=2.7
+        )
+
+        sampled_values_df = pd.DataFrame({
+            'track_id': points['track_id'].values,
+            'ERKKTR_ratio': new_ERK.cpu().numpy()
+        })
+        points_filtered = points.drop(columns=['ERKKTR_ratio'], errors='ignore')
+        sampled_values_df = sampled_values_df.merge(points_filtered, on='track_id')
+
+        sampled_values_df['Image_Metadata_T'] = T
+        sampled_values_df['track_id'] = sampled_values_df['track_id'].astype(int)
+        sampled_values_df = sampled_values_df[['track_id', 'objNuclei_Location_Center_X',
+                                               'objNuclei_Location_Center_Y', 'ERKKTR_ratio',
+                                               'Image_Metadata_T']]
+        return sampled_values_df
+
+    def calculate_neighbors(self, points: pd.DataFrame) -> torch.Tensor:
+        """
+        Calculates the adjacency matrix based on the spatial relationships between points (nuclei).
+
+        Uses the Voronoi tessellation algorithm to determine the neighboring nuclei.
+
+        Args:
+        - points (pd.DataFrame): A DataFrame with position information for each track.
+
+        Returns:
+        - torch.Tensor: The adjacency matrix indicating the neighbors of each nucleus.
+        """
+        points = points.values
+        vor = Voronoi(points[:, :3])
+
+        unique_track_ids, inverse_indices = np.unique(points[:, 0], return_inverse=True)
+        num_tracks = len(unique_track_ids)
+
+        ridge_points = vor.ridge_points.flatten()
+        ridge_neighbors = inverse_indices[ridge_points].reshape(-1, 2)
+
+        adjacency_matrix = np.zeros((num_tracks, num_tracks), dtype=np.uint8)
+        adjacency_matrix[ridge_neighbors[:, 0], ridge_neighbors[:, 1]] = 1
+        adjacency_matrix[ridge_neighbors[:, 1], ridge_neighbors[:, 0]] = 1
+
+        return torch.tensor(adjacency_matrix, device=DEVICE)
+
+    def generate_video(self):
+        """
+            Generates a simulated video of tracked nuclei over multiple frames, updating their positions and ERK values.
+
+            Args:
+            - df_first_frame (pd.DataFrame): The initial frame with position and ERK data.
+            - number_of_frames (int): The total number of frames to simulate. Defaults to 259.
+
+            Returns:
+            - pd.DataFrame: The DataFrame containing the complete video simulation data for all frames.
+            """
+        result_data_frame = self.df_first_frame.copy()
+        current_frame = self.df_first_frame.copy()
+        for T in tqdm(range(2, self.number_of_frames + 1), desc='Generating video'):
+            adjacency_matrix = self.calculate_neighbors(current_frame)
+            next_frame = self.generate_next_ERK(current_frame, adjacency_matrix, T)
+            next_frame = self.generate_next_move(next_frame)
+            result_data_frame = pd.concat([result_data_frame, next_frame])
+            current_frame = next_frame
+
+        result_data_frame = result_data_frame.reset_index(drop=True)
+
+        return result_data_frame
+
+
 if __name__ == "__main__":
-    generator = Generator()
-
-    try:
-        # Generate points
-        points = generator.deploy_points(height=1024, width=1024, points_num=1128, min_dist=23)
-
-        # Visualize the points
-        visualizer.visualize_points(points)
-        visualizer.visualize_points(generator.update_points_positions(points))
-        visualizer.visualize_voronoi_field(points, 1024, 23)
-    except ValueError as e:
-        print(f"Error: {e}")
+    df = utils.unpack_and_read('../../data/single-cell-tracks_exp1-6_noErbB2.csv.gz')
+    df_first_frame = df[(df['Image_Metadata_Site'] == 1) & (df['Exp_ID'] == 1) & (df['Image_Metadata_T'] == 1)][
+        ['track_id', 'objNuclei_Location_Center_X', 'objNuclei_Location_Center_Y', 'ERKKTR_ratio', 'Image_Metadata_T']]
+    generator = Generator(df_first_frame=df_first_frame)
+    video_data = generator.generate_video()
+    visualizer.visualize_simulation(video_data)
