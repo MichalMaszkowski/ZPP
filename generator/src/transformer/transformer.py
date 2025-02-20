@@ -13,8 +13,7 @@ from torch import nn
 
 @dataclass
 class ModelArgs:
-    # TODO: Set the default values for the model arguments
-    dim: int = 4096
+    dim: int = 256 # Play to determine the best value
     n_layers: int = 32
     n_heads: int = 32
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
@@ -70,6 +69,16 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+    """
+    Reshape the frequencies for broadcasting.
+
+    Args:
+    - freqs_cis (torch.Tensor): The frequencies
+    - x (torch.Tensor): The input tensor
+
+    Returns:
+    - torch.Tensor: The reshaped frequencies
+    """
     ndim = x.ndim
     assert 0 <= 1 < ndim
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
@@ -82,6 +91,17 @@ def apply_rotary_emb(
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Apply the rotary embeddings to the input tensors.
+
+    Args:
+    - xq (torch.Tensor): The query tensor
+    - xk (torch.Tensor): The key tensor
+    - freqs_cis (torch.Tensor): The frequencies
+
+    Returns:
+    - Tuple[torch.Tensor, torch.Tensor]: The query and key tensors with the rotary embeddings applied
+    """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
@@ -91,6 +111,20 @@ def apply_rotary_emb(
 
 
 class Attention(nn.Module):
+    """
+    Multi-head attention layer.
+
+    Args:
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - n_heads (int): The number of heads
+    - head_dim (int): The dimension of each head
+    - wq (nn.Linear): The query weight matrix
+    - wk (nn.Linear): The key weight matrix
+    - wv (nn.Linear): The value weight matrix
+    - wo (nn.Linear): The output weight matrix
+    """
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.n_heads = args.n_heads
@@ -133,6 +167,19 @@ class Attention(nn.Module):
 
 
 class FeedForward(nn.Module):
+    """
+    Feed-forward layer with Swish-Gated Linear Unit (SwiGLU) activation.
+
+    Args:
+    - dim (int): The input dimension
+    - hidden_dim (int): The hidden dimension
+    - multiple_of (int): The multiple of the hidden dimension
+
+    Attributes:
+    - w1 (nn.Linear): The first weight matrix
+    - w2 (nn.Linear): The second weight matrix
+    - w3 (nn.Linear): The third weight matrix
+    """
     def __init__(
         self,
         dim: int,
@@ -152,6 +199,21 @@ class FeedForward(nn.Module):
 
 
 class TransformerBlock(nn.Module):
+    """
+    Transformer block with attention and feed-forward layers.
+
+    Args:
+    - layer_id (int): The layer ID
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - n_heads (int): The number of heads
+    - dim (int): The input dimension
+    - head_dim (int): The dimension of each head
+    - attention (Attention): The attention layer
+    - feed_forward (FeedForward): The feed-forward layer
+    - layer_id (int): The layer ID
+    """
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
         self.n_heads = args.n_heads
@@ -180,6 +242,19 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
+    """
+    Transformer model with multiple transformer blocks.
+
+    Args:
+    - params (ModelArgs): The model arguments
+
+    Attributes:
+    - params (ModelArgs): The model arguments
+    - n_layers (int): The number of layers
+    - layers (torch.nn.ModuleList): The list of transformer blocks
+    - norm (RMSNorm): The RMSNorm layer
+    - freqs_cis (torch.Tensor): The precomputed frequencies
+    """
     def __init__(self, params: ModelArgs):
         super().__init__()
         self.params = params
@@ -198,15 +273,15 @@ class Transformer(nn.Module):
         )
 
     @torch.inference_mode()
-    def forward(self, tokens: torch.Tensor, start_pos: int):
-        _bsz, seqlen = tokens.shape
-        h = self.tok_embeddings(tokens)
+    def forward(self, input_tensor: torch.Tensor, start_pos: int = 0):
+        _bsz, seqlen, _ = input_tensor.shape
+        h = input_tensor
         self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos: start_pos + seqlen]
 
         mask = None
         if seqlen > 1:
-            mask = torch.full((seqlen, seqlen), float("-inf"), device=tokens.device)
+            mask = torch.full((seqlen, seqlen), float("-inf"), device=input_tensor.device)
 
             mask = torch.triu(mask, diagonal=1)
 
@@ -215,7 +290,7 @@ class Transformer(nn.Module):
             # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
             # j > cache_len + i, since row i corresponds to token cache_len + i.
             mask = torch.hstack(
-                [torch.zeros((seqlen, start_pos), device=tokens.device), mask]
+                [torch.zeros((seqlen, start_pos), device=input_tensor.device), mask]
             ).type_as(h)
 
         for layer in self.layers:
