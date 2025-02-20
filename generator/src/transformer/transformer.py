@@ -272,7 +272,6 @@ class Transformer(nn.Module):
             params.rope_theta,
         )
 
-    @torch.inference_mode()
     def forward(self, input_tensor: torch.Tensor, start_pos: int = 0):
         _bsz, seqlen, _ = input_tensor.shape
         h = input_tensor
