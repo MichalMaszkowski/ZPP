@@ -1,1 +1,1 @@
-__all__ = ['extractor', 'generator', 'transformer', 'utils', 'visualizer']
+__all__ = ['generator', 'model', 'transformations', 'utils', 'visualizer']

@@ -243,7 +243,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
     """
-    Transformer model with multiple transformer blocks.
+    Transformer model with multiple model blocks.
 
     Args:
     - params (ModelArgs): The model arguments
@@ -251,7 +251,7 @@ class Transformer(nn.Module):
     Attributes:
     - params (ModelArgs): The model arguments
     - n_layers (int): The number of layers
-    - layers (torch.nn.ModuleList): The list of transformer blocks
+    - layers (torch.nn.ModuleList): The list of model blocks
     - norm (RMSNorm): The RMSNorm layer
     - freqs_cis (torch.Tensor): The precomputed frequencies
     """
