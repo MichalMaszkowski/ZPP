@@ -1,6 +1,9 @@
 import imageio
-import torch
 import numpy as np
+import torch
+import matplotlib.pyplot as plt
+
+from torchvision import transforms
 
 MEANS = [224.0111, 235.0948, 226.7944]
 STDS = [69.3141, 54.4987, 63.4723]
@@ -68,8 +71,25 @@ def unnormalize_image(image: torch.Tensor) -> torch.Tensor:
     std = torch.tensor(STDS).view(3, 1, 1)
     return image * std + mean
 
+def resize_image(image: torch.Tensor, size: int = 256) -> torch.Tensor:
+    """
+    Resizes batched image tensor to a square size.
 
-def transform_gif_to_tensor(gif_path: str) -> torch.Tensor:
+    Args:
+    - image (torch.Tensor): The image tensor to resize.
+    - size (int): The size to resize the image to.
+
+    Returns:
+    - torch.Tensor: The resized image tensor.
+    """
+    B, S = image.shape[:2]
+    image = image.view(B * S, *image.shape[2:])
+    resize_transform = transforms.Resize((size, size), antialias=False)
+    image = resize_transform(image)
+    return image.view(B, S, *image.shape[1:])
+
+
+def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torch.Tensor:
     """
     Transforms a .gif file to a normalized, cropped tensor.
 
@@ -81,8 +101,11 @@ def transform_gif_to_tensor(gif_path: str) -> torch.Tensor:
     """
     frames = load_gif(gif_path)
     frames = crop_to_field_of_view(frames)
+    frames = resize_image(frames)
     frames = normalize_image(frames)
     return frames
+
+
 
 
 

@@ -3,25 +3,33 @@
 # This file has been modified from the original Llama 3 source code.
 
 import math
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Optional, Tuple, List
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
+import src.transformations.transformations as transformations
+
 
 @dataclass
 class ModelArgs:
-    dim: int = 256  # Play to determine the best value
+    dim: int = 64  # Play to determine the best value
     n_layers: int = 32
-    n_heads: int = 32
+    n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
     rope_theta: float = 21000
 
     max_batch_size: int = 32
     max_seq_len: int = 259
+
+    out_channel_sizes: List[int] = field(default_factory=lambda: [32, 32, 32, 32])
+    kernel_sizes: List[int] = field(default_factory=lambda: [3, 3, 3, 3])
+    strides: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
+    paddings: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
+    scaling_factor: int = 2
 
 
 class RMSNorm(torch.nn.Module):
@@ -297,3 +305,151 @@ class Transformer(nn.Module):
         h = self.norm(h)
         output = h.float()
         return output
+
+
+class Encoder(nn.Module):
+    """
+    Encoder model with convolutional and fully connected layers. Takes input of shape (B, S, C, H, W).
+
+    Args:
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - latent_dim (int): The latent dimension
+    - n_conv_layers (int): The number of convolutional layers
+    - conv_layers (nn.ModuleList): The list of convolutional layers
+    - batch_norm_layers (nn.ModuleList): The list of batch normalization layers
+    - fc (nn.Linear): The fully connected layer
+    - after_conv_shape (torch.Size): The shape after the convolutional layers
+    - scaling_factor (int): The scaling factor for the convolutional layers
+    """
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.latent_dim = args.dim
+        self.n_conv_layers = len(args.out_channel_sizes)
+
+        self.conv_layers = nn.ModuleList()
+        self.batch_norm_layers = nn.ModuleList()
+        self.scaling_factor = args.scaling_factor
+        for i in range(self.n_conv_layers):
+            in_channels = 3 if i == 0 else args.out_channel_sizes[i - 1]
+
+            self.conv_layers.append(
+                nn.Conv2d(
+                    in_channels=in_channels,
+                    out_channels=args.out_channel_sizes[i],
+                    kernel_size=args.kernel_sizes[i],
+                    stride=args.strides[i],
+                    padding=args.paddings[i],
+                )
+            )
+
+            self.batch_norm_layers.append(
+                nn.BatchNorm2d(args.out_channel_sizes[i])
+            )
+
+        self.fc = None  # Will be initialized with the first forward pass
+        self.after_conv_shape = None
+
+    def get_after_conv_shape(self) -> torch.Size:
+        return self.after_conv_shape
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x shape: (B, S, C, H, W) -> (B * S, C, H, W)
+        B, S = x.shape[:2]
+        x = x.view(B * S, *x.shape[2:])
+        for conv_layer, batch_layer in zip(self.conv_layers, self.batch_norm_layers):
+            x = conv_layer(x)
+            x = batch_layer(F.relu(x))
+            x = F.max_pool2d(x, self.scaling_factor, self.scaling_factor)
+
+        if self.after_conv_shape is None:
+            self.after_conv_shape = x.shape[1:]
+
+        x = torch.flatten(x, 1)
+        if self.fc is None:
+            self.fc = nn.Linear(x.shape[1], self.latent_dim)
+
+        x = self.fc(x)
+
+        return x.view(B, S, -1)
+
+
+class Decoder(nn.Module):
+    """
+    Decoder model with deconvolutional layers. Takes input of shape (B, S, C, H, W).
+
+    Args:
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - latent_dim (int): The latent dimension
+    - n_conv_layers (int): The number of convolutional layers
+    - deconv_layers (nn.ModuleList): The list of deconvolutional layers
+    - batch_norm_layers (nn.ModuleList): The list of batch normalization layers
+    - after_conv_shape (torch.Size): The shape after the convolutional layers
+    - fc (nn.Linear): The fully connected layer
+    - scaling_factor (int): The scaling factor for the deconvolutional layers
+    """
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.latent_dim = args.dim
+        self.n_conv_layers = len(args.out_channel_sizes)
+
+        self.after_conv_shape = None  # To be set based on the encoder
+        self.fc = None  # To be set based on the encoder
+
+        self.deconv_layers = nn.ModuleList()
+        self.batch_norm_layers = nn.ModuleList()
+        self.scaling_factor = args.scaling_factor
+
+        for i in range(self.n_conv_layers - 1, -1, -1):
+            in_channels = args.out_channel_sizes[i]
+            out_channels = 3 if i == 0 else args.out_channel_sizes[i - 1]
+
+            self.deconv_layers.append(
+                nn.ConvTranspose2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=args.kernel_sizes[i] + 1,
+                    stride=self.scaling_factor,
+                    padding=args.paddings[i],
+                )
+            )
+
+            self.batch_norm_layers.append(
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def set_after_conv_shape(self, after_conv_shape: torch.Size):
+        self.after_conv_shape = after_conv_shape
+        self.fc = nn.Linear(self.latent_dim, int(torch.prod(torch.Tensor(list(after_conv_shape)))))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x shape: (B, S, H) -> (B * S, H)
+        B, S = x.shape[:2]
+        x = x.view(B * S, *x.shape[2:])
+        x = self.fc(x)
+        x = x.view(-1, *self.after_conv_shape)
+
+        for deconv_layer, batch_layer in zip(self.deconv_layers, self.batch_norm_layers):
+            x = deconv_layer(x)
+            x = batch_layer(F.relu(x))
+
+        return x.view(B, S, *x.shape[1:])
+
+
+if __name__ == "__main__":
+    args = ModelArgs()
+    frames = transformations.transform_gif_to_tensor("../../data/simulation.gif")
+    print(frames.shape)
+    encoder = Encoder(args)
+    encoded = encoder(frames)
+    print(encoded.shape)
+    decoder = Decoder(args)
+    decoder.set_after_conv_shape(encoder.get_after_conv_shape())
+    decoded = decoder(encoded)
+    print(decoded.shape)
+
+
+
