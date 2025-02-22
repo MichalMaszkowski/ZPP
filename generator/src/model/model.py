@@ -15,9 +15,9 @@ import src.transformations.transformations as transformations
 
 @dataclass
 class ModelArgs:
-    dim: int = 256  # Play to determine the best value
+    dim: int = 64  # Play to determine the best value
     n_layers: int = 32
-    n_heads: int = 32
+    n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
     rope_theta: float = 21000
@@ -413,7 +413,8 @@ class Decoder(nn.Module):
                     out_channels=out_channels,
                     kernel_size=args.kernel_sizes[i],
                     stride=self.scaling_factor,
-                    padding=args.paddings[i]
+                    padding=args.paddings[i],
+                    output_padding=1
                 )
             )
 
