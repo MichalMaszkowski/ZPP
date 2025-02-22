@@ -16,7 +16,7 @@ import src.transformations.transformations as transformations
 @dataclass
 class ModelArgs:
     dim: int = 64  # Play to determine the best value
-    n_layers: int = 32
+    n_layers: int = 8
     n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
@@ -439,17 +439,55 @@ class Decoder(nn.Module):
         return x.view(B, S, *x.shape[1:])
 
 
+class SpatioTemporalTransformer(nn.Module):
+    """
+    Spatio-temporal transformer model.
+
+    Args:
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - encoder (Encoder): The encoder model
+    - transformer (Transformer): The transformer model
+    - decoder (Decoder): The decoder model
+    - decoder_init (bool): Whether the decoder has been initialized
+    """
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.encoder = Encoder(args)
+        self.transformer = Transformer(args)
+        self.decoder = Decoder(args)
+
+        self.decoder_init = False
+
+    def set_decoder_init(self, decoder_init: bool):
+        self.decoder_init = decoder_init
+
+    def get_encoder_latent_space(self, x: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x)
+
+    def get_encoder_transformer_space(self, x: torch.Tensor) -> torch.Tensor:
+        return self.transformer(self.encoder(x))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(x)
+        x = self.transformer(x)
+        if not self.decoder_init:
+            self.decoder.set_after_conv_shape(self.encoder.get_after_conv_shape())
+            self.decoder_init = True
+
+        x = self.decoder(x)
+
+        return x
+
+
 if __name__ == "__main__":
     args = ModelArgs()
-    frames = transformations.transform_gif_to_tensor("../../data/simulation.gif")
+    model = SpatioTemporalTransformer(args)
+    frames = transformations.transform_gif_to_tensor()
     print(frames.shape)
-    encoder = Encoder(args)
-    encoded = encoder(frames)
-    print(encoded.shape)
-    decoder = Decoder(args)
-    decoder.set_after_conv_shape(encoder.get_after_conv_shape())
-    decoded = decoder(encoded)
-    print(decoded.shape)
+    output = model(frames)
+    print(output.shape)
 
 
 
