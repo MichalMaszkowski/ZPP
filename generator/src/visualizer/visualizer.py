@@ -48,18 +48,18 @@ def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
         plt.xlabel('Center X')
         plt.ylabel('Center Y')
         plt.title(f'Simulating Movement Time: {t}')
-        plt.grid(True)
+        plt.grid(False)
 
         cbar = plt.colorbar(sc, label=f'Intensity ({marker})')
 
         filename = f"../../data/temp_frames/frame_{t:03d}.png"
-        plt.savefig(filename)
+        plt.savefig(filename, transparent=False)
         frames.append(filename)
         plt.close()
 
     with imageio.get_writer("../../data/simulation.gif", mode='I', duration=1) as writer:
         for frame in frames:
-            image = imageio.imread(frame)
+            image = imageio.imread(frame)[..., :3]
             writer.append_data(image)
 
     for frame in frames:
