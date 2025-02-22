@@ -3,12 +3,14 @@
 # This file has been modified from the original Llama 3 source code.
 
 import math
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Optional, Tuple, List
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+import src.transformations.transformations as transformations
 
 
 @dataclass
@@ -22,6 +24,11 @@ class ModelArgs:
 
     max_batch_size: int = 32
     max_seq_len: int = 259
+
+    out_channel_sizes: List[int] = field(default_factory=lambda: [32, 64, 128, 256])
+    kernel_sizes: List[int] = field(default_factory=lambda: [3, 3, 3, 3])
+    strides: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
+    paddings: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
 
 
 class RMSNorm(torch.nn.Module):
@@ -297,3 +304,57 @@ class Transformer(nn.Module):
         h = self.norm(h)
         output = h.float()
         return output
+
+
+class Encoder(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.latent_dim = args.dim
+        self.n_conv_layers = len(args.out_channel_sizes)
+
+        self.conv_layers = nn.ModuleList()
+        self.batch_norm_layers = nn.ModuleList()
+        for i in range(self.n_conv_layers):
+            in_channels = 3 if i == 0 else args.out_channel_sizes[i - 1]
+
+            self.conv_layers.append(
+                nn.Conv2d(
+                    in_channels=in_channels,
+                    out_channels=args.out_channel_sizes[i],
+                    kernel_size=args.kernel_sizes[i],
+                    stride=args.strides[i],
+                    padding=args.paddings[i],
+                )
+            )
+
+            self.batch_norm_layers.append(
+                nn.BatchNorm2d(args.out_channel_sizes[i])
+            )
+
+        self.fc = None  # Will be initialized with the first forward pass
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x shape: (B, S, C, H, W) -> (B * S, C, H, W)
+        B, S = x.shape[:2]
+        x = x.view(B * S, *x.shape[2:])
+        for conv_layer, batch_layer in zip(self.conv_layers, self.batch_norm_layers):
+            x = conv_layer(x)
+            x = batch_layer(F.relu(x))
+            x = F.max_pool2d(x, 2, 2)
+
+        x = torch.flatten(x, 1)
+        if self.fc is None:
+            self.fc = nn.Linear(x.shape[1], self.latent_dim)
+        x = self.fc(x)
+        return x.view(B, S, -1)
+
+
+if __name__ == "__main__":
+    args = ModelArgs()
+    frames = transformations.transform_gif_to_tensor("../../data/simulation.gif")
+    encoder = Encoder(args)
+    print(frames.shape)
+    print(encoder(frames).shape)
+
+
+

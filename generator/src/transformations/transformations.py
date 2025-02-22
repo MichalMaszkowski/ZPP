@@ -69,7 +69,7 @@ def unnormalize_image(image: torch.Tensor) -> torch.Tensor:
     return image * std + mean
 
 
-def transform_gif_to_tensor(gif_path: str) -> torch.Tensor:
+def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torch.Tensor:
     """
     Transforms a .gif file to a normalized, cropped tensor.
 
