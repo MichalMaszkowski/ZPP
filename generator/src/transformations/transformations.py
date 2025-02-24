@@ -1,7 +1,6 @@
 import imageio
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
 from torchvision import transforms
 
@@ -90,10 +89,24 @@ def resize_image(image: torch.Tensor, size: int = 256) -> torch.Tensor:
     return image.view(B, S, *image.shape[1:])
 
 
+def transform_image_to_trainable_form(image: torch.Tensor) -> torch.Tensor:
+    """
+    Transforms an image tensor to a trainable form by casting it to float32 and normalizing it.
+
+    Args:
+    - image (torch.Tensor): The image tensor to transform.
+
+    Returns:
+    - torch.Tensor: The transformed image tensor.
+    """
+    image = normalize_image(image.float())
+    return image
+
+
 @torch.no_grad()
 def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torch.Tensor:
     """
-    Transforms a .gif file to a normalized, cropped tensor.
+    Transforms a .gif file to a cropped tensor. (not normalized)
 
     Args:
     - gif_path (str): The path to the .gif file.
