@@ -18,6 +18,16 @@ else:
 @torch.no_grad()
 def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
                                    maintain_experiment_visualization: bool = False) -> torch.Tensor:
+    """
+    Transforms tabular data to images and load them to a tensor of shape (B, S, C, H, W)
+    Tensor is not normalized and saved as float16 for memory efficiency
+
+    Args:
+    - experiments Tuple[int]: Experiments to include in tensor. Default (1, 2, 3, 4, 5, 6) - All experiments
+
+    Returns:
+    - torch.Tensor: The cropped image tensor.
+    """
     df = utils.unpack_and_read('../../data/single-cell-tracks_exp1-6_noErbB2.csv.gz')
     if not os.path.exists("../../data/experiments"):
         os.makedirs("../../data/experiments")
@@ -55,7 +65,7 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
     if not maintain_experiment_visualization:
         os.rmdir("../../data/experiments")
 
-    torch.save(experiments_tensor, "../../data/experiments_tensor_exp_1.pt")
+    torch.save(experiments_tensor, "../../data/experiments_tensor.pt")
 
     return experiments_tensor
 
@@ -63,5 +73,5 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
 # Example usage of the function:
 # Here I create a tensor containing the data of experiment 2.
 if __name__ == "__main__":
-    load_experiment_data_to_tensor((2,))
+    load_experiment_data_to_tensor((1,))
 
