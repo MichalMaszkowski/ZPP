@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 from torchvision import transforms
 
-MEANS = [224.0111, 235.0948, 226.7944]
-STDS = [69.3141, 54.4987, 63.4723]
+MEANS = [223.5459, 240.8361, 237.1875]
+STDS = [64.2124, 38.7054, 44.2737]
 
 
 def load_gif(path: str) -> torch.Tensor:
@@ -22,7 +22,7 @@ def load_gif(path: str) -> torch.Tensor:
     gif = imageio.get_reader(path)
     frames = np.array([frame for frame in gif])
     frames = np.transpose(frames, (0, 3, 1, 2))
-    tensor_frames = torch.tensor(frames, dtype=torch.float32)  # Shape: (S, C, H, W)
+    tensor_frames = torch.tensor(frames, dtype=torch.float16)  # Shape: (S, C, H, W)
     batched_tensor = tensor_frames.unsqueeze(0)  # Add batch dimension (B=1)
     return batched_tensor
 
@@ -52,8 +52,8 @@ def normalize_image(image: torch.Tensor) -> torch.Tensor:
     Returns:
     - torch.Tensor: The normalized image tensor.
     """
-    mean = torch.tensor(MEANS).view(3, 1, 1)
-    std = torch.tensor(STDS).view(3, 1, 1)
+    mean = torch.tensor(MEANS, device=image.device).view(3, 1, 1)
+    std = torch.tensor(STDS, device=image.device).view(3, 1, 1)
     return (image - mean) / std
 
 
@@ -67,9 +67,10 @@ def unnormalize_image(image: torch.Tensor) -> torch.Tensor:
     Returns:
     - torch.Tensor: The unnormalized image tensor.
     """
-    mean = torch.tensor(MEANS).view(3, 1, 1)
-    std = torch.tensor(STDS).view(3, 1, 1)
+    mean = torch.tensor(MEANS, device=image.device).view(3, 1, 1)
+    std = torch.tensor(STDS, device=image.device).view(3, 1, 1)
     return image * std + mean
+
 
 def resize_image(image: torch.Tensor, size: int = 256) -> torch.Tensor:
     """
@@ -89,6 +90,7 @@ def resize_image(image: torch.Tensor, size: int = 256) -> torch.Tensor:
     return image.view(B, S, *image.shape[1:])
 
 
+@torch.no_grad()
 def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torch.Tensor:
     """
     Transforms a .gif file to a normalized, cropped tensor.
@@ -102,7 +104,6 @@ def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torc
     frames = load_gif(gif_path)
     frames = crop_to_field_of_view(frames)
     frames = resize_image(frames)
-    frames = normalize_image(frames)
     return frames
 
 
