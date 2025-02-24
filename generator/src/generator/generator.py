@@ -16,7 +16,7 @@ else:
 
 
 class Generator:
-    def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 259):
+    def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 258):
         """
         Initializes the Generator object with the first frame of data and the number of frames to simulate.
         :param df_first_frame:
@@ -123,7 +123,7 @@ class Generator:
 
             Args:
             - df_first_frame (pd.DataFrame): The initial frame with position and ERK data.
-            - number_of_frames (int): The total number of frames to simulate. Defaults to 259.
+            - number_of_frames (int): The total number of frames to simulate. Defaults to 258.
 
             Returns:
             - pd.DataFrame: The DataFrame containing the complete video simulation data for all frames.
