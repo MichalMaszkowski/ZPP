@@ -21,6 +21,7 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
     """
     Transforms tabular data to images and load them to a tensor of shape (B, S, C, H, W)
     Tensor is not normalized and saved as float16 for memory efficiency
+    Clipping 'ERKKTR_ratio' to [0.4, 2.7] to avoid outliers
 
     Args:
     - experiments Tuple[int]: Experiments to include in tensor. Default (1, 2, 3, 4, 5, 6) - All experiments
@@ -71,7 +72,7 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
 
 
 # Example usage of the function:
-# Here I create a tensor containing the data of experiment 2.
+# Here I create a tensor containing the data of experiment 1.
 if __name__ == "__main__":
     load_experiment_data_to_tensor((1,))
 
