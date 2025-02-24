@@ -23,7 +23,7 @@ class ModelArgs:
     rope_theta: float = 21000
 
     max_batch_size: int = 32
-    max_seq_len: int = 259
+    max_seq_len: int = 258
 
     out_channel_sizes: List[int] = field(default_factory=lambda: [32, 32, 32, 32])
     kernel_sizes: List[int] = field(default_factory=lambda: [3, 3, 3, 3])

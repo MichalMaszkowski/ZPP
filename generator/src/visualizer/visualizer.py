@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import imageio.v2 as imageio
@@ -7,7 +8,25 @@ from tqdm import tqdm
 import os
 
 
-def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
+def visualize_tensor_image(image_tensor: torch.tensor):
+    """
+    Visualizes a tensor image shape (C, H, W) as a matplotlib plot without any axis.
+    Tensors are floats from range [0, 255.0].
+
+    Args:
+    - image_tensor (torch.tensor): The tensor image to visualize.
+
+    Returns:
+    - None
+    """
+    image = image_tensor.permute(1, 2, 0).cpu().numpy() / 255.0
+    plt.imshow(image)
+    plt.axis('off')
+    plt.show()
+
+
+def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 258,
+                         path: str = "../../data/simulation.gif") -> None:
     """
     Visualizes the simulation of nuclei movement and ERK values over time.
 
@@ -20,8 +39,8 @@ def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
     """
     marker = 'ERKKTR_ratio'
 
-    min_value = np.log(simulation[marker].min())
-    max_value = np.log(simulation[marker].max())
+    min_value = np.log(0.4)
+    max_value = np.log(2.7)
 
     output_dir = "../../data/temp_frames"
     os.makedirs(output_dir, exist_ok=True)
@@ -30,7 +49,7 @@ def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
     colors = ['darkblue', 'blue', 'turquoise', 'yellow', 'orange', 'red']
     custom_cmap = LinearSegmentedColormap.from_list('DarkBlueToYellow', colors)
 
-    for t in tqdm(range(1, number_of_frames + 1), desc='Creating frames'):
+    for t in tqdm(range(0, number_of_frames), desc='Creating frames'):
         current_frame = simulation[simulation['Image_Metadata_T'] == t]
         plt.figure(figsize=(8, 6))
         sc = plt.scatter(
@@ -57,7 +76,7 @@ def visualize_simulation(simulation: pd.DataFrame, number_of_frames: int = 259):
         frames.append(filename)
         plt.close()
 
-    with imageio.get_writer("../../data/simulation.gif", mode='I', duration=1) as writer:
+    with imageio.get_writer(path, mode='I', duration=1) as writer:
         for frame in frames:
             image = imageio.imread(frame)[..., :3]
             writer.append_data(image)

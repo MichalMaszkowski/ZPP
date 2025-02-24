@@ -16,7 +16,7 @@ else:
 
 
 class Generator:
-    def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 259):
+    def __init__(self, df_first_frame: pd.DataFrame, number_of_frames: int = 258):
         """
         Initializes the Generator object with the first frame of data and the number of frames to simulate.
         :param df_first_frame:
@@ -41,6 +41,7 @@ class Generator:
             'objNuclei_Location_Center_Y'].shape)
         return current_frame
 
+    @torch.no_grad()
     def generate_next_ERK(self, points: pd.DataFrame, adjacency_matrix: torch.tensor, T: int) -> pd.DataFrame:
         """
         Simulates the next ERK values for the given nuclei based on adjacency and previous ERK values.
@@ -123,14 +124,14 @@ class Generator:
 
             Args:
             - df_first_frame (pd.DataFrame): The initial frame with position and ERK data.
-            - number_of_frames (int): The total number of frames to simulate. Defaults to 259.
+            - number_of_frames (int): The total number of frames to simulate. Defaults to 258.
 
             Returns:
             - pd.DataFrame: The DataFrame containing the complete video simulation data for all frames.
             """
         result_data_frame = self.df_first_frame.copy()
         current_frame = self.df_first_frame.copy()
-        for T in tqdm(range(2, self.number_of_frames + 1), desc='Generating video'):
+        for T in tqdm(range(1, self.number_of_frames), desc='Generating video'):
             adjacency_matrix = self.calculate_neighbors(current_frame)
             next_frame = self.generate_next_ERK(current_frame, adjacency_matrix, T)
             next_frame = self.generate_next_move(next_frame)
@@ -144,7 +145,7 @@ class Generator:
 
 if __name__ == "__main__":
     df = utils.unpack_and_read('../../data/single-cell-tracks_exp1-6_noErbB2.csv.gz')
-    df_first_frame = df[(df['Image_Metadata_Site'] == 1) & (df['Exp_ID'] == 1) & (df['Image_Metadata_T'] == 1)][
+    df_first_frame = df[(df['Image_Metadata_Site'] == 1) & (df['Exp_ID'] == 1) & (df['Image_Metadata_T'] == 0)][
         ['track_id', 'objNuclei_Location_Center_X', 'objNuclei_Location_Center_Y', 'ERKKTR_ratio', 'Image_Metadata_T']]
     generator = Generator(df_first_frame=df_first_frame)
     video_data = generator.generate_video()
