@@ -74,5 +74,7 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
 # Example usage of the function:
 # Here I create a tensor containing the data from experiment 1.
 if __name__ == "__main__":
-    load_experiment_data_to_tensor((1,))
+    # load_experiment_data_to_tensor((1,))
+    my_tensor = torch.load("../../data/experiments_tensor_exp_1.pt")
+    visualizer.visualize_tensor_image(my_tensor[0][0])
 
