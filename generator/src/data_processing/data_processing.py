@@ -113,16 +113,29 @@ class TensorDataset(Dataset):
             return item[:-1], item[1:]
 
 
-# Example usage of the function:
-# Here I create a tensor containing the data from experiment 1.
-if __name__ == "__main__":
-    # load_experiment_data_to_tensor((1,))
+def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
+                   load_to_ram: bool = False,
+                   batch_size: int = 16,
+                   num_workers: int = 0,
+                   pin_memory: bool = False):
+    """
+    Get a DataLoader object for the TensorDataset.
 
-    #my_tensor = torch.load("../../data/tensors_to_load/experiments_tensor_exp_1_fov_1.pt")
-    dataset = TensorDataset(load_to_ram=True)
-    loader = DataLoader(dataset, batch_size=10, shuffle=True, num_workers=0)
+    Args:
+    - data_folder (str): Path to the folder containing tensor files with multiple batches.
+    - load_to_ram (bool): If True, loads all tensors into RAM. Otherwise, loads lazily from disk.
+    - batch_size (int): The number of samples in each batch.
+    - num_workers (int): The number of workers to use for loading data.
+    - pin_memory (bool): If True, the data loader will copy Tensors into CUDA pinned memory before returning them.
 
-    for source, target in loader:
-        print(source.shape, target.shape)
+    Returns:
+    - DataLoader: The DataLoader object for the TensorDataset.
+    """
+    dataset = TensorDataset(data_folder, load_to_ram)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
+                            num_workers=num_workers, pin_memory=pin_memory)
+
+    return dataloader
+
 
 
