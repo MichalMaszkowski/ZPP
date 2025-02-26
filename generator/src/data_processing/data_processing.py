@@ -72,7 +72,7 @@ class TensorDataset(Dataset):
                  load_to_ram: bool = False):
         """
         Args:
-            data_folder (str): Path to the folder containing tensor files with multiple batches.
+            data_folder (str): Path to the folder containing tensor files.
             load_to_ram (bool): If True, loads all tensors into RAM. Otherwise, loads lazily from disk.
         """
         self.data_folder = data_folder
@@ -93,15 +93,9 @@ class TensorDataset(Dataset):
             self.data = self.file_names
 
     def __len__(self):
-        """
-        Calculate the total number of batches in all files.
-        """
         return self.data_len
 
     def __getitem__(self, idx):
-        """
-        Get a batch by index.
-        """
         if self.load_to_ram:
             return self.data[idx][:-1], self.data[idx][1:]
         else:
