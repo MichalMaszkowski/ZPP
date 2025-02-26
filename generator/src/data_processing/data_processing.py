@@ -1,6 +1,7 @@
 from typing import Tuple
 import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
 import os
 
 import src.utils.utils as utils
@@ -14,10 +15,19 @@ elif torch.backends.mps.is_available():
 else:
     DEVICE = torch.device("cpu")
 
+BATCH_SIZES = {
+    "experiments_tensor_exp_1.pt": 20,
+    "experiments_tensor_exp_2.pt": 18,
+    "experiments_tensor_exp_3.pt": 20,
+    "experiments_tensor_exp_4.pt": 20,
+    "experiments_tensor_exp_5.pt": 18,
+    "experiments_tensor_exp_6.pt": 24,
+}
+
 
 @torch.no_grad()
 def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
-                                   maintain_experiment_visualization: bool = False) -> torch.Tensor:
+                                   maintain_experiment_visualization: bool = False):
     """
     Transforms tabular data to images and load them to a tensor of shape (B, S, C, H, W)
     Tensor is not normalized and saved as float16 for memory efficiency
@@ -35,13 +45,12 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
 
     df['ERKKTR_ratio'] = np.clip(df['ERKKTR_ratio'], 0.4, 2.7)
     df = df[df['Exp_ID'].isin(experiments)]
-    videos_count = len(df[['Exp_ID', 'Image_Metadata_Site']].drop_duplicates())
-    experiments_tensor = torch.zeros(videos_count, 258, 3, 256, 256, device=DEVICE, dtype=torch.float16)
 
-    i = 0
     for experiment in experiments:
+        i = 0
         df_experiment = df[df['Exp_ID'] == experiment]
         fields_of_view = np.sort(df_experiment['Image_Metadata_Site'].unique())
+        experiments_tensor = torch.zeros(len(fields_of_view), 258, 3, 256, 256, device=DEVICE, dtype=torch.float16)
 
         for field_of_view in fields_of_view:
             df_fov = df_experiment[df_experiment['Image_Metadata_Site'] == field_of_view]
@@ -63,18 +72,88 @@ def load_experiment_data_to_tensor(experiments: Tuple[int] = (1, 2, 3, 4, 5, 6),
                 os.remove(f"../../data/experiments/experiment_{experiment}_fov_{field_of_view}.gif")
             i += 1
 
+        torch.save(experiments_tensor, f"../../data/tensors_to_load/experiments_tensor_exp_{experiment}.pt")
+
     if not maintain_experiment_visualization:
         os.rmdir("../../data/experiments")
 
-    torch.save(experiments_tensor, "../../data/experiments_tensor.pt")
 
-    return experiments_tensor
+class TensorDataset(Dataset):
+    def __init__(self, batches_per_file: dict, data_folder: str = "../../data/tensors_to_load/",
+                 load_to_ram: bool = False):
+        """
+        Args:
+            batches_per_file (dict): Dictionary where keys are file names and values are the number of batches per file.
+            data_folder (str): Path to the folder containing tensor files with multiple batches.
+            load_to_ram (bool): If True, loads all tensors into RAM. Otherwise, loads lazily from disk.
+        """
+        self.data_folder = data_folder
+        self.batches_per_file = batches_per_file if batches_per_file else {}
+        self.file_names = sorted(os.listdir(data_folder))
+        self.load_to_ram = load_to_ram
+        self.data_len = 0
+
+        if self.load_to_ram:
+            self.data = []
+            for f_name in self.file_names:
+                file_path = os.path.join(data_folder, f_name)
+                batches = torch.load(file_path)
+                self.data_len += batches.size(0)
+                self.data.extend(batches)
+
+            self.data = torch.stack(self.data)
+        else:
+            self.data = self.file_names
+            self.data_len = sum(self.batches_per_file.get(file_name, 0) for file_name in self.file_names)
+
+    def __len__(self):
+        """
+        Calculate the total number of batches in all files.
+        """
+        return self.data_len
+
+    def get_batches_per_file(self, file_name):
+        """
+        Get the number of batches for a given file from the batches_per_file dictionary.
+        """
+        return self.batches_per_file.get(file_name, 0)
+
+    def __getitem__(self, idx):
+        """
+        Get a batch by index.
+        """
+        if self.load_to_ram:
+            return self.data[idx][:-1], self.data[idx][1:]
+        else:
+            total_batches = 0
+            file_idx = None
+            batch_idx = None
+
+            for file_name in self.file_names:
+                batches_in_file = self.get_batches_per_file(file_name)
+                if total_batches + batches_in_file > idx:
+                    file_idx = file_name
+                    batch_idx = idx - total_batches
+                    break
+                total_batches += batches_in_file
+
+            if file_idx is None:
+                raise IndexError("Index out of range.")
+
+            file_path = os.path.join(self.data_folder, file_idx)
+            batches = torch.load(file_path)
+
+            return batches[batch_idx][:-1], batches[batch_idx][1:]
 
 
 # Example usage of the function:
 # Here I create a tensor containing the data from experiment 1.
 if __name__ == "__main__":
     # load_experiment_data_to_tensor((1,))
-    my_tensor = torch.load("../../data/experiments_tensor_exp_1.pt")
-    visualizer.visualize_tensor_image(my_tensor[0][0])
+    dataset = TensorDataset(batches_per_file=BATCH_SIZES, load_to_ram=True)
+    loader = DataLoader(dataset, batch_size=10, shuffle=True)
+
+    for source, target in loader:
+        print(source.shape, target.shape)
+
 
