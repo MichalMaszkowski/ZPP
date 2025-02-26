@@ -19,7 +19,7 @@ def visualize_tensor_image(image_tensor: torch.tensor):
     Returns:
     - None
     """
-    image = image_tensor.permute(1, 2, 0).cpu().numpy() / 255.0
+    image = image_tensor.permute(1, 2, 0).float().cpu().numpy() / 255.0
     plt.imshow(image)
     plt.axis('off')
     plt.show()
