@@ -131,6 +131,8 @@ class Generator:
             """
         result_data_frame = self.df_first_frame.copy()
         current_frame = self.df_first_frame.copy()
+        current_frame['Image_Metadata_T'] = 0
+
         for T in tqdm(range(1, self.number_of_frames), desc='Generating video'):
             adjacency_matrix = self.calculate_neighbors(current_frame)
             next_frame = self.generate_next_ERK(current_frame, adjacency_matrix, T)

@@ -485,6 +485,7 @@ if __name__ == "__main__":
     args = ModelArgs()
     model = SpatioTemporalTransformer(args)
     frames = transformations.transform_gif_to_tensor()
+    frames = transformations.transform_image_to_trainable_form(frames)
     print(frames.shape)
     output = model(frames)
     print(output.shape)

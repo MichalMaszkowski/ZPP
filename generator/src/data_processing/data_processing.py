@@ -132,4 +132,6 @@ def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
     return dataloader
 
 
-
+if __name__ == "__main__":
+    my_tensor = torch.load("../../data/tensors_to_load/experiments_tensor_exp_1_fov_1.pt")
+    visualizer.visualize_tensor_image(my_tensor[0][0])
