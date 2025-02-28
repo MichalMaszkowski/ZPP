@@ -89,22 +89,20 @@ class TensorDataset(Dataset):
                 self.data.extend(batches)
 
             self.data = torch.stack(self.data)
-        else:
-            self.data = self.file_names
 
     def __len__(self):
         return self.data_len
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> torch.Tensor:
         if self.load_to_ram:
-            return self.data[idx][:-1], self.data[idx][1:]
+            return self.data[idx]
         else:
             file_idx = self.file_names[idx]
             file_path = os.path.join(self.data_folder, file_idx)
             batches = torch.load(file_path)
             item = batches[0]
 
-            return item[:-1], item[1:]
+            return item
 
 
 def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
@@ -132,4 +130,6 @@ def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
     return dataloader
 
 
-
+if __name__ == "__main__":
+    my_tensor = torch.load("../../data/tensors_to_load/experiments_tensor_exp_1_fov_1.pt")
+    visualizer.visualize_tensor_image(my_tensor[0][0])
