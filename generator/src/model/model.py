@@ -16,7 +16,7 @@ import src.transformations.transformations as transformations
 @dataclass
 class ModelArgs:
     dim: int = 64  # Play to determine the best value
-    n_layers: int = 8
+    n_layers: int = 4
     n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
@@ -357,7 +357,7 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x shape: (B, S, C, H, W) -> (B * S, C, H, W)
         B, S = x.shape[:2]
-        x = x.view(B * S, *x.shape[2:])
+        x = x.reshape(B * S, *x.shape[2:])
         for conv_layer, batch_layer in zip(self.conv_layers, self.batch_norm_layers):
             x = conv_layer(x)
             x = batch_layer(F.relu(x))
@@ -368,7 +368,7 @@ class Encoder(nn.Module):
 
         x = torch.flatten(x, 1)
         if self.fc is None:
-            self.fc = nn.Linear(x.shape[1], self.latent_dim)
+            self.fc = nn.Linear(x.shape[1], self.latent_dim).to(x.device)
 
         x = self.fc(x)
 
@@ -423,7 +423,8 @@ class Decoder(nn.Module):
 
     def set_after_conv_shape(self, after_conv_shape: torch.Size):
         self.after_conv_shape = after_conv_shape
-        self.fc = nn.Linear(self.latent_dim, int(torch.prod(torch.Tensor(list(after_conv_shape)))))
+        self.fc = (nn.Linear(self.latent_dim, int(torch.prod(torch.Tensor(list(after_conv_shape)))))
+                   .to(next(self.parameters()).device))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x shape: (B, S, H) -> (B * S, H)
