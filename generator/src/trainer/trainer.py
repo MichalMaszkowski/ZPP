@@ -68,6 +68,8 @@ class Trainer:
     def train_epoch(self, model: torch.nn.Module, train_loader: DataLoader,
                     optimizer: torch.optim.Optimizer, epoch: int):
         model.train()
+        total_loss = 0.0
+        batch_count = 0
         progress_bar = tqdm(train_loader, desc=f"Train epoch {epoch:>3}")
         for batch in progress_bar:
             batch = batch.to(self.device)
@@ -78,11 +80,15 @@ class Trainer:
             loss.backward()
             optimizer.step()
 
-            progress_bar.set_postfix(loss=f"{loss.item():.4f}")
+            total_loss += loss.item()
+            batch_count += 1
+
+            avg_loss = total_loss / batch_count
+            progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
 
 
 if __name__ == "__main__":
-    trainer = Trainer(n_epochs=1)
+    trainer = Trainer(n_epochs=100)
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
     loader = data_processing.get_dataloader(batch_size=1)
