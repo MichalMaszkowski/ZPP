@@ -50,7 +50,25 @@ class Trainer:
     def compute_loss(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         return F.mse_loss(predictions, targets)
 
-    def train(self, model: torch.nn.Module, train_loader: DataLoader):
+    def evaluate(self, model: torch.nn.Module, test_loader: DataLoader):
+        model.eval()
+        total_loss = 0.0
+        batch_count = 0
+        progress_bar = tqdm(test_loader, desc="Evaluate")
+        for batch in progress_bar:
+            batch = batch.to(self.device)
+            batch = transformations.transform_image_to_trainable_form(batch)
+            predictions = model(batch[:, :-1])
+            loss = self.compute_loss(predictions, batch[:, 1:])
+
+            total_loss += loss.item()
+            batch_count += 1
+
+            avg_loss = total_loss / batch_count
+            progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
+
+    def train(self, model: torch.nn.Module, train_loader: DataLoader,
+              test_loader: DataLoader):
         model = model.to(self.device)
 
         if self.batch_norm_momentum is not None:
@@ -64,9 +82,10 @@ class Trainer:
         for epoch in range(1, self.n_epochs + 1):
             self.train_epoch(model, train_loader, optimizer, epoch)
             lr_scheduler.step()
+            self.evaluate(model, test_loader)
 
     def train_epoch(self, model: torch.nn.Module, train_loader: DataLoader,
-                    test_loader: DataLoader, optimizer: torch.optim.Optimizer, epoch: int):
+                    optimizer: torch.optim.Optimizer, epoch: int):
         model.train()
         total_loss = 0.0
         batch_count = 0
@@ -88,14 +107,15 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer(n_epochs=100)
+    trainer = Trainer(n_epochs=20)
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
     train_loader, test_loader = data_processing.get_dataloader(batch_size=1)
-    trainer.train(model, train_loader)
+    trainer.train(model, train_loader, test_loader)
 
     # get the first batch of the loader
-    batch = next(iter(train_loader)).to(DEVICE)
+    model.eval()
+    batch = next(iter(test_loader)).to(DEVICE)
     batch = transformations.transform_image_to_trainable_form(batch)
     predictions = model(batch[:, :-1])
     predictions_unnormalized = transformations.unnormalize_image(predictions)
