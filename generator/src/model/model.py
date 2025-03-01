@@ -15,8 +15,8 @@ import src.transformations.transformations as transformations
 
 @dataclass
 class ModelArgs:
-    dim: int = 64  # Play to determine the best value
-    n_layers: int = 4
+    dim: int = 256  # Play to determine the best value
+    n_layers: int = 128
     n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
@@ -25,7 +25,7 @@ class ModelArgs:
     max_batch_size: int = 32
     max_seq_len: int = 258
 
-    out_channel_sizes: List[int] = field(default_factory=lambda: [32, 32, 32, 32])
+    out_channel_sizes: List[int] = field(default_factory=lambda: [32, 64, 128, 256])
     kernel_sizes: List[int] = field(default_factory=lambda: [3, 3, 3, 3])
     strides: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
     paddings: List[int] = field(default_factory=lambda: [1, 1, 1, 1])
