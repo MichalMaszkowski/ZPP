@@ -4,6 +4,7 @@ from typing import Iterable
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 from tqdm import tqdm
+from clearml import Logger
 
 import src.model.model as model
 import src.data_processing.data_processing as data_processing
@@ -50,7 +51,7 @@ class Trainer:
     def compute_loss(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         return F.mse_loss(predictions, targets)
 
-    def evaluate(self, model: torch.nn.Module, test_loader: DataLoader):
+    def evaluate(self, model: torch.nn.Module, test_loader: DataLoader, epoch: int, logger: Logger = None):
         model.eval()
         total_loss = 0.0
         batch_count = 0
@@ -66,9 +67,14 @@ class Trainer:
 
             avg_loss = total_loss / batch_count
             progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
+        
+        if logger is not None:
+            logger.report_scalar(
+                title="Validation Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
+            )
 
     def train(self, model: torch.nn.Module, train_loader: DataLoader,
-              test_loader: DataLoader):
+              test_loader: DataLoader, logger: Logger = None):
         model = model.to(self.device)
 
         if self.batch_norm_momentum is not None:
@@ -80,12 +86,12 @@ class Trainer:
         optimizer, lr_scheduler = self.get_optimizer_and_scheduler(model.parameters())
 
         for epoch in range(1, self.n_epochs + 1):
-            self.train_epoch(model, train_loader, optimizer, epoch)
+            self.train_epoch(model, train_loader, optimizer, epoch, logger)
             lr_scheduler.step()
-            self.evaluate(model, test_loader)
+            self.evaluate(model, test_loader, epoch, logger)
 
     def train_epoch(self, model: torch.nn.Module, train_loader: DataLoader,
-                    optimizer: torch.optim.Optimizer, epoch: int):
+                    optimizer: torch.optim.Optimizer, epoch: int, logger: Logger = None):
         model.train()
         total_loss = 0.0
         batch_count = 0
@@ -104,7 +110,11 @@ class Trainer:
 
             avg_loss = total_loss / batch_count
             progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
-
+            
+        if logger is not None:
+            logger.report_scalar(
+                title="Average Epoch Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
+            )
 
 if __name__ == "__main__":
     trainer = Trainer(n_epochs=20)
