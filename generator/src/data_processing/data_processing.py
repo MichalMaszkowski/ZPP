@@ -1,7 +1,7 @@
 from typing import Tuple
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 import os
 
 import src.utils.utils as utils
@@ -105,29 +105,49 @@ class TensorDataset(Dataset):
             return item
 
 
+from torch.utils.data import random_split, DataLoader
+import torch
+import os
+
+
 def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
                    load_to_ram: bool = False,
                    batch_size: int = 16,
                    num_workers: int = 0,
-                   pin_memory: bool = False):
+                   pin_memory: bool = False,
+                   train_split: float = 0.8,
+                   seed: int = 42):
     """
-    Get a DataLoader object for the TensorDataset.
+    Get train and test DataLoaders for the TensorDataset.
 
     Args:
-    - data_folder (str): Path to the folder containing tensor files with multiple batches.
+    - data_folder (str): Path to the folder containing tensor files.
     - load_to_ram (bool): If True, loads all tensors into RAM. Otherwise, loads lazily from disk.
     - batch_size (int): The number of samples in each batch.
     - num_workers (int): The number of workers to use for loading data.
-    - pin_memory (bool): If True, the data loader will copy Tensors into CUDA pinned memory before returning them.
+    - pin_memory (bool): If True, copies Tensors into CUDA pinned memory before returning.
+    - train_split (float): The fraction of data to be used for training (default: 80%).
+    - seed (int): Random seed for reproducibility.
 
     Returns:
-    - DataLoader: The DataLoader object for the TensorDataset.
+    - train_dataloader (DataLoader): DataLoader for training set.
+    - test_dataloader (DataLoader): DataLoader for testing set.
     """
     dataset = TensorDataset(data_folder, load_to_ram)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                            num_workers=num_workers, pin_memory=pin_memory)
 
-    return dataloader
+    train_size = int(train_split * len(dataset))
+    test_size = len(dataset) - train_size
+
+    torch.manual_seed(seed)
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+                                  num_workers=num_workers, pin_memory=pin_memory)
+
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+                                 num_workers=num_workers, pin_memory=pin_memory)
+
+    return train_dataloader, test_dataloader
 
 
 if __name__ == "__main__":

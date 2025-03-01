@@ -66,7 +66,7 @@ class Trainer:
             lr_scheduler.step()
 
     def train_epoch(self, model: torch.nn.Module, train_loader: DataLoader,
-                    optimizer: torch.optim.Optimizer, epoch: int):
+                    test_loader: DataLoader, optimizer: torch.optim.Optimizer, epoch: int):
         model.train()
         total_loss = 0.0
         batch_count = 0
@@ -91,11 +91,11 @@ if __name__ == "__main__":
     trainer = Trainer(n_epochs=100)
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
-    loader = data_processing.get_dataloader(batch_size=1)
-    trainer.train(model, loader)
+    train_loader, test_loader = data_processing.get_dataloader(batch_size=1)
+    trainer.train(model, train_loader)
 
     # get the first batch of the loader
-    batch = next(iter(loader)).to(DEVICE)
+    batch = next(iter(train_loader)).to(DEVICE)
     batch = transformations.transform_image_to_trainable_form(batch)
     predictions = model(batch[:, :-1])
     predictions_unnormalized = transformations.unnormalize_image(predictions)
