@@ -69,11 +69,6 @@ def generate_dataset(gen_factory, seq_len, num_entries, dim, exclude=[], correla
 
     exclude is the set of sequences that aren't to be used in training
     """
-def generate_dataset(gen_factory, seq_len, num_entries, dim, exclude=[], correlation_factor=0.0):
-    """
-    For generating datasets with num_entries elements each of length seq_len.
-    The data is generated with 'dim' independent dimensions per time step.
-    """
     entries = []
     generators = []
 
@@ -119,7 +114,7 @@ def generate_dataset(gen_factory, seq_len, num_entries, dim, exclude=[], correla
     (512, 256, 16, 1e-5, 128, 20),
 ])
 
-def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_size, n_epochs, setup_data):
+def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_size, n_epochs, setup_clearml):
     train_loader, test_loader = setup_data(dim, batch_size)
     
     # Set up the model args
@@ -155,54 +150,60 @@ def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_
     # Optionally - assert training progress
     assert task.state == 'completed'
 
-# Fixture to initialize the data and model
-def setup_data():
-    # Fixture function to initialize the model and generate data based on `dim`
-    def _setup(dim, batch_size):
-        # Generate artificial data based on the `dim` argument
-        seq_len = 64  # Define sequence length
-        train_data, train_targets = generate_dataset(generate_recursive, seq_len, 10000, dim)
-        test_data, test_targets = generate_dataset(generate_recursive, seq_len, 1000, dim)
 
-        # Create DataLoader
-        train_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(train_data, train_targets),
-            batch_size=batch_size
-        )
-        test_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(test_data, test_targets),
-            batch_size=batch_size
-        )
-        return train_loader, test_loader
+def example_generator(initial, vocab_size, next_prob):
+    """
+    A procedure that returns a generator function
+    for generating sequences based on specific parameters.
+    """
+    def example_gen():
+        return SeqGen(*generate_recursive(initial, vocab_size, next_prob))
+    return example_gen
 
-    return _setup
+# Initialize the data and model
+def setup_data(dim, batch_size):
+    # Generate artificial data based on the `dim` argument
+    seq_len = 64  # Define sequence length
+    vocab_size = 7
+    next_prob = 0.1
+    initial = 2
+
+    perm_example_generator = example_generator(initial, vocab_size, next_prob)
+
+    test_dataset, generators = generate_dataset(
+        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=1000, dim=dim)
+    train_dataset, _ = generate_dataset(
+        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=10000, dim=dim, exclude=generators)
+
+    # Create DataLoader
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
+
+    return train_loader, test_loader
+
 
 # Test ClearML integration
-def test_clearml_integration():
-    setup_clearml()
+def test_clearml_integration(setup_clearml):
     task = Task.init(project_name='TestProject', task_name='TestTask')
     
     # Check if the task is initialized correctly
     assert task.id is not None, "ClearML task was not initialized properly"
 
+
 # Test Data Generation
 def test_data_generation():
-    # Set parameters for data generation
-    dim = 256  # Test with dimension of 256
-    seq_len = 64  # Sequence length
-
+    
+    perm_example_generator = example_generator(initial=1, vocab_size=3, next_prob=0.5)
     # Generate dataset
-    train_data, train_targets = generate_dataset(generate_recursive, seq_len, 100, dim)
+    gen_dataset, _ = generate_dataset(
+            gen_factory=perm_example_generator, seq_len=30, num_entries=10, dim=10)
     
     # Verify the shape of the data
-    assert train_data[0].shape == (seq_len, dim), f"Expected shape (seq_len, dim), got {train_data[0].shape}"
+    assert gen_dataset[0].shape == (30, 10), f"Expected shape (seq_len, dim), got {gen_dataset[0].shape}"
     
     # Print the first sequence to verify the content
-    print(f"First training sequence: {train_data[0][:5]}")  # Print first 5 values of the first sequence
-
-    # Optionally, you can print other entries to visually inspect the data generation
-    print(f"Shape of generated data: {train_data[0].shape}")
-    print(f"First 5 entries of the first sequence: {train_data[0][:5]}")
+    print(f"First generated sequence: {gen_dataset[0]}")
+    print(f"Second generated sequence: {gen_dataset[1]}")
 
 
 # Run the tests
