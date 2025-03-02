@@ -1,10 +1,11 @@
+import os
 import torch
 import torch.nn.functional as F
 from typing import Iterable
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 from tqdm import tqdm
-from clearml import Logger
+from clearml import Logger, Task
 
 import src.model.model as model
 import src.data_processing.data_processing as data_processing
@@ -29,6 +30,17 @@ BATCH_NORM_TYPES = (
     | torch.nn.LazyBatchNorm3d
 )
 
+def setup_clearml():
+    access_key = os.getenv('CLEARML_ACCESS_KEY')
+    secret_key = os.getenv('CLEARML_SECRET_KEY')
+
+    Task.set_credentials(
+        web_host='https://app.clear.ml',
+        api_host='https://api.clear.ml',
+        files_host='https://files.clear.ml',
+        key=access_key,
+        secret=secret_key
+    )
 
 class Trainer:
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
