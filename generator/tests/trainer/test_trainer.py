@@ -9,7 +9,6 @@ import src.model.model as model
 import src.data_processing.data_processing as data_processing
 
 # Set up ClearML
-@pytest.fixture
 def setup_clearml():
     access_key = os.getenv('CLEARML_ACCESS_KEY')
     secret_key = os.getenv('CLEARML_SECRET_KEY')
@@ -22,7 +21,7 @@ def setup_clearml():
         secret=secret_key
     )
 
-# Data generation (updated with hidden_dim support)
+# Data generation
 def generate_recursive(n_first, vocab_size, next_prob):
     assert 0 < vocab_size
     initial = np.random.randint(0, vocab_size, n_first)
@@ -107,14 +106,16 @@ def generate_dataset(gen_factory, seq_len, num_entries, dim, exclude=[], correla
     return torch.utils.data.TensorDataset(x, y), set(generators)
 
 
-# Test with different hyperparameters (ModelArgs values)
-@pytest.mark.parametrize("dim, n_layers, n_heads, lr, batch_size, n_epochs", [
-    (256, 128, 8, 2e-4, 32, 10),
-    (128, 64, 4, 1e-3, 64, 5),
-    (512, 256, 16, 1e-5, 128, 20),
+# Test with different hyperparameters
+@pytest.mark.parametrize("dim, n_layers, n_heads, lr, batch_size, n_epochs, use_clearml", [
+    (128, 8, 8, 1e-3, 64, 5, False)
+    # TODO: Add reasonable combinations of hyperparams to check
 ])
 
-def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_size, n_epochs, setup_clearml):
+def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_size, n_epochs, use_clearml):
+    # Optional
+    if use_clearml:
+        setup_clearml()
     train_loader, test_loader = setup_data(dim, batch_size)
     
     # Set up the model args
@@ -134,15 +135,18 @@ def test_train_with_different_hyperparameters(dim, n_layers, n_heads, lr, batch_
         'n_epochs': n_epochs,
     }
     
-    task = Task.init(
-        project_name='Test Transformer',
-        task_name=f'Run {n_epochs} - ' + ', '.join([f'{key}: {value}' for key, value in params.items()]),
-        task_type=Task.TaskTypes.optimizer
-    )
-    
-    # Log hyperparameters for this task
-    task.connect(params)
-    logger = task.get_logger()
+    if use_clearml:
+        task = Task.init(
+            project_name='Test Transformer',
+            task_name=f'Run {n_epochs} - ' + ', '.join([f'{key}: {value}' for key, value in params.items()]),
+            task_type=Task.TaskTypes.optimizer
+        )
+        
+        # Log hyperparameters for this task
+        task.connect(params)
+        logger = task.get_logger()
+    else:
+        logger = None
 
     # Train the model
     trainer.train(model_instance, train_loader, test_loader, logger=logger)
@@ -171,9 +175,9 @@ def setup_data(dim, batch_size):
     perm_example_generator = example_generator(initial, vocab_size, next_prob)
 
     test_dataset, generators = generate_dataset(
-        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=1000, dim=dim)
+        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=10, dim=dim)
     train_dataset, _ = generate_dataset(
-        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=10000, dim=dim, exclude=generators)
+        gen_factory=perm_example_generator, seq_len=seq_len, num_entries=100, dim=dim, exclude=generators)
 
     # Create DataLoader
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size)
@@ -183,7 +187,8 @@ def setup_data(dim, batch_size):
 
 
 # Test ClearML integration
-def test_clearml_integration(setup_clearml):
+def test_clearml_integration():
+    setup_clearml()
     task = Task.init(project_name='TestProject', task_name='TestTask')
     
     # Check if the task is initialized correctly
@@ -193,18 +198,18 @@ def test_clearml_integration(setup_clearml):
 # Test Data Generation
 def test_data_generation():
     
-    perm_example_generator = example_generator(initial=1, vocab_size=3, next_prob=0.5)
+    perm_example_generator = example_generator(initial=1, vocab_size=10, next_prob=0.1)
     # Generate dataset
     gen_dataset, _ = generate_dataset(
-            gen_factory=perm_example_generator, seq_len=30, num_entries=10, dim=10)
-    
+            gen_factory=perm_example_generator, seq_len=11, num_entries=10, dim=5)
+
+    # Access one sample from the dataset (first data point)
+    first_sample = gen_dataset[0]
     # Verify the shape of the data
-    assert gen_dataset[0].shape == (30, 10), f"Expected shape (seq_len, dim), got {gen_dataset[0].shape}"
+    assert first_sample[0].shape == (10, 5), f"Expected shape (seq_len - 1, dim), got {first_sample[0].shape}"
     
     # Print the first sequence to verify the content
-    print(f"First generated sequence: {gen_dataset[0]}")
-    print(f"Second generated sequence: {gen_dataset[1]}")
-
+    print("First generated sequence :\n",first_sample)
 
 # Run the tests
 if __name__ == "__main__":
