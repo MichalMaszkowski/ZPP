@@ -77,6 +77,7 @@ class Trainer:
         for batch in progress_bar:
             batch = batch.to(self.device)
             batch = transformations.transform_image_to_trainable_form(batch)
+            batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
 
@@ -112,6 +113,7 @@ class Trainer:
         for batch in progress_bar:
             batch = batch.to(self.device)
             batch = transformations.transform_image_to_trainable_form(batch)
+            batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
             optimizer.zero_grad()
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
@@ -134,11 +136,15 @@ if __name__ == "__main__":
 
     # get the first batch of the loader
     model.eval()
-    batch = next(iter(test_loader)).to(DEVICE)
+    batch = next(iter(train_loader)).to(DEVICE)
     batch = transformations.transform_image_to_trainable_form(batch)
+    batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
+    print(batch[:,:,1].std())
     predictions = model(batch[:, :-1])
+    print(predictions[:,:,1].std())
     predictions_unnormalized = transformations.unnormalize_image(predictions)
-    visualizer.visualize_tensor_image(predictions_unnormalized[0][-1])
+    print(predictions_unnormalized[:,:,1].mean())
+    visualizer.visualize_tensor_image(predictions_unnormalized[0][1])
 
 
 
