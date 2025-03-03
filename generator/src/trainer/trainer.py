@@ -30,6 +30,25 @@ BATCH_NORM_TYPES = (
 
 
 class Trainer:
+    """
+    Trainer class to train the model using AdamW optimizer and StepLR scheduler
+
+    Args:
+    - lr (float): The learning rate. Default 2e-4
+    - weight_decay (float): The weight decay. Default 3e-5
+    - batch_norm_momentum (float | None): The batch norm momentum. Default 0.002
+    - n_epochs (int): The number of epochs. Default 10
+    - device (str): The device to use. Default DEVICE
+    - extra_augmentation (v2.Transform | None): The extra augmentation to use. Default None
+
+    Attributes:
+    - lr (float): The learning rate
+    - weight_decay (float): The weight decay
+    - batch_norm_momentum (float | None): The batch norm momentum
+    - n_epochs (int): The number of epochs
+    - device (str): The device to use
+    - extra_augmentation (v2.Transform | None): The extra augmentation to use
+    """
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
                  batch_norm_momentum: float | None = 0.002, n_epochs: int = 10,
                  device: str = DEVICE, extra_augmentation: v2.Transform | None = None):
