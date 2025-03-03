@@ -36,7 +36,7 @@ class Trainer:
     Args:
     - lr (float): The learning rate. Default 2e-4
     - weight_decay (float): The weight decay. Default 3e-5
-    - batch_norm_momentum (float | None): The batch norm momentum. Default 0.002
+    - batch_norm_momentum (float | None): The batch norm momentum. Default 0.01 - Important for training stability
     - n_epochs (int): The number of epochs. Default 10
     - device (str): The device to use. Default DEVICE
     - extra_augmentation (v2.Transform | None): The extra augmentation to use. Default None
@@ -50,7 +50,7 @@ class Trainer:
     - extra_augmentation (v2.Transform | None): The extra augmentation to use
     """
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
-                 batch_norm_momentum: float | None = 0.002, n_epochs: int = 10,
+                 batch_norm_momentum: float | None = 0.01, n_epochs: int = 10,
                  device: str = DEVICE, extra_augmentation: v2.Transform | None = None):
         self.lr = lr
         self.weight_decay = weight_decay
@@ -77,7 +77,6 @@ class Trainer:
         for batch in progress_bar:
             batch = batch.to(self.device)
             batch = transformations.transform_image_to_trainable_form(batch)
-            batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
 
@@ -113,7 +112,6 @@ class Trainer:
         for batch in progress_bar:
             batch = batch.to(self.device)
             batch = transformations.transform_image_to_trainable_form(batch)
-            batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
             optimizer.zero_grad()
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
@@ -128,7 +126,7 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer(n_epochs=20)
+    trainer = Trainer(n_epochs=100)
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
     train_loader, test_loader = data_processing.get_dataloader(batch_size=1)
@@ -138,12 +136,8 @@ if __name__ == "__main__":
     model.eval()
     batch = next(iter(train_loader)).to(DEVICE)
     batch = transformations.transform_image_to_trainable_form(batch)
-    batch = batch[:,:,:,:32,:32]  # TODO: Delete this line
-    print(batch[:,:,1].std())
     predictions = model(batch[:, :-1])
-    print(predictions[:,:,1].std())
     predictions_unnormalized = transformations.unnormalize_image(predictions)
-    print(predictions_unnormalized[:,:,1].mean())
     visualizer.visualize_tensor_image(predictions_unnormalized[0][1])
 
 

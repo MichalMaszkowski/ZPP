@@ -15,8 +15,8 @@ import src.transformations.transformations as transformations
 
 @dataclass
 class ModelArgs:
-    dim: int = 32  # Play to determine the best value
-    n_layers: int = 2
+    dim: int = 128  # Play to determine the best value
+    n_layers: int = 16
     n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
@@ -448,6 +448,35 @@ class Decoder(nn.Module):
         x = self.last_conv_layer(x)
 
         return x.view(B, S, *x.shape[1:])
+
+
+class AutoEncoder(nn.Module):
+    """
+    Autoencoder model.
+
+    Args:
+    - args (ModelArgs): The model arguments
+
+    Attributes:
+    - encoder (Encoder): The encoder model
+    - decoder (Decoder): The decoder model
+    """
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.encoder = Encoder(args)
+        self.decoder = Decoder(args)
+
+        self.decoder_init = False
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(x)
+        if not self.decoder_init:
+            self.decoder.set_after_conv_shape(self.encoder.get_after_conv_shape())
+            self.decoder_init = True
+
+        x = self.decoder(x)
+
+        return x
 
 
 class SpatioTemporalTransformer(nn.Module):
