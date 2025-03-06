@@ -5,18 +5,21 @@
 import os
 import math
 import numpy as np
+from itertools import product
 from dataclasses import dataclass, field
 from typing import Optional, Tuple, List, Iterable
 from clearml import Logger, Task
+# uncomment if running in colab:
+# from google.colab import userdata
+from tqdm import tqdm
 
+from torch.utils.data import DataLoader
+from torchvision.transforms import v2
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.utils.data import DataLoader
-from torchvision.transforms import v2
-from tqdm import tqdm
 
-
+# Constants definiton
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 elif torch.backends.mps.is_available():
@@ -29,19 +32,19 @@ SEQ_LEN = 64
 VOCAB_SIZE = 7
 NEXT_PROB = .1
 INITIAL = 2
-    
+
 @dataclass
 class ModelArgs:
-    vocab_size = VOCAB_SIZE # Added!
-
-    dim: int = 16  # Play to determine the best value
-    n_layers: int = 4
-    n_heads: int = 4
+    vocab_size: int = VOCAB_SIZE # Added!
+    
+    dim: int = 256  # Play to determine the best value
+    n_layers: int = 128
+    n_heads: int = 8
     multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
     norm_eps: float = 1e-5
     rope_theta: float = 21000
 
-    max_batch_size: int = 128
+    max_batch_size: int = 32
     max_seq_len: int = 258
 
     out_channel_sizes: List[int] = field(default_factory=lambda: [32, 64, 128, 256])
@@ -312,7 +315,7 @@ class Transformer(nn.Module):
         # Added : embedding
         input_tensor = self.embedding(input_tensor) # (B, S) -> (B, S, dim)
         # -----------------
-        
+
         _bsz, seqlen, _ = input_tensor.shape
         h = input_tensor
         self.freqs_cis = self.freqs_cis.to(h.device)
@@ -339,7 +342,7 @@ class Transformer(nn.Module):
         # Added : final projection
         h = self.final_proj(h)
         # -----------------
-        
+
         output = h.float()
         return output
 
@@ -356,8 +359,12 @@ BATCH_NORM_TYPES = (
 )
 
 def setup_clearml():
+    # Comment if running in colab:
     access_key = os.getenv('CLEARML_ACCESS_KEY')
     secret_key = os.getenv('CLEARML_SECRET_KEY')
+    # Uncomment if running in colab:
+    # access_key = userdata.get('CLEARML_ACCESS_KEY')
+    # secret_key = userdata.get('CLEARML_SECRET_KEY')
 
     Task.set_credentials(
         web_host='https://app.clear.ml',
@@ -366,6 +373,7 @@ def setup_clearml():
         key=access_key,
         secret=secret_key
     )
+
 
 class Trainer:
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
@@ -406,13 +414,13 @@ class Trainer:
 
             avg_loss = total_loss / batch_count
             progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
-        
+
         if logger is not None:
             logger.report_scalar(
-                title="Validation Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
+                title="Validation Loss", series="Inner Transformer", iteration=epoch, value=avg_loss
             )
 
-    def evaluate_accuracy(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader):
+    def evaluate_accuracy(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, epoch: int, logger: Logger = None):
         model.eval()
         sum_acc = 0
         num_examples = 0
@@ -428,7 +436,14 @@ class Trainer:
             sum_acc += acc
             num_examples += model_out.shape[0] * model_out.shape[1]
 
-        return sum_acc / num_examples
+        avg_acc = sum_acc / num_examples
+        # Added : logging the evaluated accuracy (after each training epoch)
+        if logger is not None:
+            logger.report_scalar(
+                title="Validation Accuracy", series="Inner Transformer", iteration=epoch, value=avg_acc
+            )
+
+        return avg_acc
 
     def train(self, model: torch.nn.Module, train_loader: DataLoader,
               test_loader: DataLoader, logger: Logger = None):
@@ -448,7 +463,7 @@ class Trainer:
             self.evaluate(model, test_loader, epoch, logger)
 
             # Evaluating accuracy after each epoch
-            acc = self.evaluate_accuracy(model, test_loader)
+            acc = self.evaluate_accuracy(model, test_loader, epoch, logger)
             print(f"{epoch}: Avg eval accuracy {acc}")
 
     def train_epoch(self, model: torch.nn.Module, train_loader: DataLoader,
@@ -475,10 +490,10 @@ class Trainer:
 
             avg_loss = total_loss / batch_count
             progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
-            
+
         if logger is not None:
             logger.report_scalar(
-                title="Average Epoch Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
+                title="Average Epoch Loss", series="Inner Transformer", iteration=epoch, value=avg_loss
             )
 
 
@@ -585,10 +600,77 @@ TRAIN_LOADER = torch.utils.data.DataLoader(
     TRAIN_DATASET, batch_size=BATCH_SIZE)
 TEST_LOADER = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE)
 
+
 # IV. Training & evaluation
 
-args = ModelArgs()
-trainer = Trainer(n_epochs=70)
-# Training the model
-model = Transformer(ModelArgs).to(DEVICE)
-trainer.train(model, TRAIN_LOADER, TEST_LOADER)
+def test_hyperparameters(dim, n_layers, n_heads, rope_theta, n_epochs, batch_size, lr, use_clearml):
+    # Optional: If use_clearml is True, set up ClearML
+    if use_clearml:
+        setup_clearml()
+
+    # Get the data loaders
+    train_loader, test_loader = TRAIN_LOADER, TEST_LOADER
+
+    # Set up the model args from ModelArgs dataclass
+    args = ModelArgs(dim=dim, n_layers=n_layers, n_heads=n_heads, rope_theta=rope_theta)
+    # Intialize the trainer and model
+    model = Transformer(args).to(DEVICE)
+    trainer = Trainer(n_epochs=n_epochs, lr=lr)
+
+    # Create a new ClearML task for each run
+    params = {
+        'dim': dim,
+        'n_layers': n_layers,
+        'n_heads': n_heads,
+        'rope_theta': rope_theta,
+        'n_epochs': n_epochs,
+        'batch_size': batch_size,
+        'lr': lr,
+    }
+
+    if use_clearml:
+        task = Task.init(
+            project_name='Test Transformer',
+            task_name=f'Run {n_epochs} - ' + ', '.join([f'{key}: {value}' for key, value in params.items()]),
+            task_type=Task.TaskTypes.optimizer
+        )
+        # Log hyperparameters for this task
+        task.connect(params)
+        logger = task.get_logger()
+    else:
+        logger = None
+
+    # Train the model
+    trainer.train(model, train_loader, test_loader, logger=logger)
+
+    if use_clearml:
+        # Close the experiment with this hiperparameters.
+        task.close()
+
+# Define hyperparameter ranges
+dim_values = [32, 64, 128, 256]
+n_layers_values = [4, 8, 16, 32, 64]
+n_heads_values = [4, 8, 16, 32]
+rope_theta_values = [100, 1000, 10000, 20000]
+n_epochs_values = [20]
+batch_size_values = [32, 64, 128]
+lr_values = [1e-2, 1e-3, 2e-4]
+use_clearml_values = [False] # Change to True to activate clearml logging!
+
+# Generate all combinations of hyperparameters
+combinations = product(
+    dim_values, n_layers_values, n_heads_values, rope_theta_values,
+    n_epochs_values, batch_size_values, lr_values, use_clearml_values
+)
+
+# Iterate through all combinations and run the test
+for i, (dim, n_layers, n_heads, rope_theta, n_epochs, batch_size, lr, use_clearml) in enumerate(combinations):
+    print(f"Running combination {i + 1}:")
+    print(f"  dim: {dim}, n_layers: {n_layers}, n_heads: {n_heads}, rope_theta: {rope_theta}")
+    print(f"  n_epochs: {n_epochs}, batch_size: {batch_size}, lr: {lr}, use_clearml: {use_clearml}")
+    print("-" * 50)
+
+    # Call the test function
+    test_hyperparameters(dim, n_layers, n_heads, rope_theta, n_epochs, batch_size, lr, use_clearml)
+
+    print("Test completed.\n")
