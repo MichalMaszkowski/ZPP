@@ -4,6 +4,7 @@ import torch
 
 from torchvision import transforms
 
+# Calculated for 256x256 images
 MEANS = [223.5459, 240.8361, 237.1875]
 STDS = [64.2124, 38.7054, 44.2737]
 

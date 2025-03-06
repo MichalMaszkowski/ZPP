@@ -105,11 +105,6 @@ class TensorDataset(Dataset):
             return item
 
 
-from torch.utils.data import random_split, DataLoader
-import torch
-import os
-
-
 def get_dataloader(data_folder: str = "../../data/tensors_to_load/",
                    load_to_ram: bool = False,
                    batch_size: int = 16,
