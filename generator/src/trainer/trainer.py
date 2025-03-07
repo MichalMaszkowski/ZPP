@@ -1,9 +1,8 @@
 import os
 import torch
 import torch.nn.functional as F
-from typing import Iterable
+from typing import Iterable, Callable, Optional
 from torch.utils.data import DataLoader
-from torchvision.transforms import v2
 from tqdm import tqdm
 from clearml import Logger, Task
 
@@ -30,6 +29,7 @@ BATCH_NORM_TYPES = (
     | torch.nn.LazyBatchNorm3d
 )
 
+
 def setup_clearml():
     access_key = os.getenv('CLEARML_ACCESS_KEY')
     secret_key = os.getenv('CLEARML_SECRET_KEY')
@@ -41,6 +41,7 @@ def setup_clearml():
         key=access_key,
         secret=secret_key
     )
+
 
 class Trainer:
     """
@@ -63,10 +64,11 @@ class Trainer:
     - extra_augmentation (v2.Transform | None): The extra augmentation to use
     """
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
-                 batch_norm_momentum: float | None = 0.01, n_epochs: int = 10,
-                 device: str = DEVICE, extra_augmentation: v2.Transform | None = None):
+                 batch_size: int = 16, batch_norm_momentum: float | None = 0.01, n_epochs: int = 10,
+                 device: str = DEVICE, extra_augmentation: Optional[Callable] = None):
         self.lr = lr
         self.weight_decay = weight_decay
+        self.batch_size = batch_size
         self.batch_norm_momentum = batch_norm_momentum
         self.n_epochs = n_epochs
         self.device = device
@@ -104,9 +106,12 @@ class Trainer:
                 title="Validation Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
             )
 
-    def train(self, model: torch.nn.Module, train_loader: DataLoader,
-              test_loader: DataLoader, logger: Logger = None):
+    def train(self, model: torch.nn.Module, logger: Logger = None):
         model = model.to(self.device)
+
+        train_loader, test_loader = (data_processing.
+                                     get_dataloader(batch_size=self.batch_size,
+                                                    transform=self.extra_augmentation))
 
         if self.batch_norm_momentum is not None:
             # Default torch.nn.BatchNorm2D.momentum is 0.1, but it's often too high.
@@ -126,6 +131,7 @@ class Trainer:
         model.train()
         total_loss = 0.0
         batch_count = 0
+        avg_loss = 0.0
         progress_bar = tqdm(train_loader, desc=f"Train epoch {epoch:>3}")
         for batch in progress_bar:
             batch = batch.to(self.device)
@@ -144,17 +150,19 @@ class Trainer:
             
         if logger is not None:
             logger.report_scalar(
-                title="Average Epoch Loss", series="Inner Transformer Loss", iteration=epoch, value=avg_loss
+                title="Average Epoch Loss", series="Inner Transformer Loss",
+                iteration=epoch, value=avg_loss
             )
 
+
 if __name__ == "__main__":
-    trainer = Trainer(n_epochs=100)
+    trainer = Trainer(n_epochs=100, batch_size=1)
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
-    train_loader, test_loader = data_processing.get_dataloader(batch_size=1)
-    trainer.train(model, train_loader, test_loader)
+    trainer.train(model)
 
     # get the first batch of the loader
+    train_loader, _ = data_processing.get_dataloader(batch_size=1)
     model.eval()
     batch = next(iter(train_loader)).to(DEVICE)
     batch = transformations.transform_image_to_trainable_form(batch)

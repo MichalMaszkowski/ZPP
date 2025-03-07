@@ -103,6 +103,28 @@ def transform_image_to_trainable_form(image: torch.Tensor) -> torch.Tensor:
     image = normalize_image(image.float())
     return image
 
+def transformations_for_training(image: torch.Tensor) -> torch.Tensor:
+    """
+    TODO: Add docstring
+
+    Args:
+    - image (torch.Tensor): The image tensor to transform.
+
+    Returns:
+    - torch.Tensor: The transformed image tensor.
+    """
+    image = normalize_image(image.float())
+
+    B, S, _, _, _ = image.shape
+    image = image.view(B * S, *image.shape[2:])
+
+    # transform = transforms.Compose([
+    #
+    # ])
+
+    # image = transform(image)
+
+    return image.reshape(B, S, *image.shape[1:])
 
 @torch.no_grad()
 def transform_gif_to_tensor(gif_path: str = "../../data/simulation.gif") -> torch.Tensor:
