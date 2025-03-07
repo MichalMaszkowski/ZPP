@@ -65,20 +65,21 @@ class Trainer:
     """
     def __init__(self, lr: float = 2e-4, weight_decay: float = 3e-5,
                  batch_size: int = 16, batch_norm_momentum: float | None = 0.01, n_epochs: int = 10,
-                 device: str = DEVICE, extra_augmentation: Optional[Callable] = None):
+                 device: str = DEVICE,
+                 extra_augmentation: Optional[Callable] = transformations.transformations_for_training):
         self.lr = lr
         self.weight_decay = weight_decay
         self.batch_size = batch_size
         self.batch_norm_momentum = batch_norm_momentum
         self.n_epochs = n_epochs
         self.device = device
-        self.extra_augmentation = extra_augmentation  # TODO: Add reasonable extra augmentation
+        self.extra_augmentation = extra_augmentation
 
     def get_optimizer_and_scheduler(
             self, parameters: Iterable[torch.nn.Parameter]
     ) -> tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LRScheduler]:
         optimizer = torch.optim.AdamW(parameters, lr=self.lr, weight_decay=self.weight_decay, fused=True)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.97)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1)
         return optimizer, lr_scheduler
 
     def compute_loss(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -91,7 +92,6 @@ class Trainer:
         progress_bar = tqdm(test_loader, desc="Evaluate")
         for batch in progress_bar:
             batch = batch.to(self.device)
-            batch = transformations.transform_image_to_trainable_form(batch)
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
 
@@ -135,7 +135,6 @@ class Trainer:
         progress_bar = tqdm(train_loader, desc=f"Train epoch {epoch:>3}")
         for batch in progress_bar:
             batch = batch.to(self.device)
-            batch = transformations.transform_image_to_trainable_form(batch)
             optimizer.zero_grad()
             predictions = model(batch[:, :-1])
             loss = self.compute_loss(predictions, batch[:, 1:])
@@ -156,16 +155,25 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer(n_epochs=100, batch_size=1)
+    trainer = Trainer(
+        n_epochs=20,
+        lr=1e-4,
+        batch_size=4,
+        batch_norm_momentum=0.1,
+        extra_augmentation=lambda image: transformations.transformations_for_training(image, crop_size=32)
+    )
     args = model.ModelArgs()
     model = model.SpatioTemporalTransformer(args).to(DEVICE)
     trainer.train(model)
 
     # get the first batch of the loader
-    train_loader, _ = data_processing.get_dataloader(batch_size=1)
+    train_loader, test_loader = data_processing.get_dataloader(
+        batch_size=1,
+        transform=lambda image: transformations.transformations_for_evaluation(image, crop_size=32)
+    )
+
     model.eval()
-    batch = next(iter(train_loader)).to(DEVICE)
-    batch = transformations.transform_image_to_trainable_form(batch)
+    batch = next(iter(test_loader)).to(DEVICE)
     predictions = model(batch[:, :-1])
     predictions_unnormalized = transformations.unnormalize_image(predictions)
     visualizer.visualize_tensor_image(predictions_unnormalized[0][1])
